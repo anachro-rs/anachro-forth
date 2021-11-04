@@ -7,28 +7,15 @@ use std::{
 };
 
 #[derive(Clone)]
-enum Word {
+pub enum Word {
     LiteralVal(i32),
     Builtin(fn(&mut Context) -> Result<(), ()>),
     Compiled(Vec<Arc<Word>>),
 }
 
-impl Word {
-    fn execute(&self, ctxt: &mut Context) -> Result<(), ()> {
-        match self {
-            Word::LiteralVal(lit) => {
-                ctxt.data_stk.push(*lit);
-                Ok(())
-            }
-            Word::Builtin(func) => func(ctxt),
-            Word::Compiled(words) => {
-                for word in words {
-                    word.execute(ctxt)?;
-                }
-                Ok(())
-            }
-        }
-    }
+struct ExecCtx {
+    idx: usize,
+    word: Arc<Word>,
 }
 
 type Stack = Vec<i32>;
@@ -37,13 +24,62 @@ type Dict = BTreeMap<String, Arc<Word>>;
 pub struct Context {
     data_stk: Stack,
     ret_stk: Stack,
+    flow_stk: Vec<ExecCtx>,
     dict: Dict,
+}
+
+pub enum StepResult {
+    Done,
+    Working,
+}
+
+impl Context {
+    pub fn step(&mut self) -> StepResult {
+        let cur = match self.flow_stk.last_mut() {
+            Some(frame) => frame,
+            None => return StepResult::Done,
+        };
+
+        let word: &Word = cur.word.deref();
+
+        let to_push = match word {
+            Word::LiteralVal(lit) => {
+                self.data_stk.push(*lit);
+                None
+            },
+            Word::Builtin(func) => {
+                func(self).unwrap();
+                None
+            },
+            Word::Compiled(words) => {
+                let ret = words.get(cur.idx).map(Clone::clone);
+                cur.idx += 1;
+                ret
+            },
+        };
+
+        if let Some(push) = to_push {
+            self.push_exec(push);
+        } else {
+            self.flow_stk.pop();
+        }
+
+        StepResult::Working
+    }
+
+    pub fn push_exec(&mut self, word: Arc<Word>) {
+        self.flow_stk.push(ExecCtx {
+            idx: 0,
+            word,
+        });
+    }
 }
 
 fn main() -> IoResult<()> {
     let mut ctxt = Context {
         data_stk: Vec::new(),
         ret_stk: Vec::new(),
+        flow_stk: Vec::new(),
         dict: BTreeMap::new(),
     };
 
@@ -54,6 +90,9 @@ fn main() -> IoResult<()> {
     loop {
         let input = read()?;
         evaluate(&mut ctxt, input).unwrap();
+        while let StepResult::Working = ctxt.step() {
+            // ...
+        }
         print();
     }
 }
@@ -70,6 +109,9 @@ fn read() -> IoResult<Vec<String>> {
 // TODO: Expand number parser
 // Make this a function to later allow for more custom parsing
 // of literals like '0b1111_0000_1111_0000'
+//
+// See https://github.com/rust-analyzer/rust-analyzer/blob/c96481e25f08d1565cb9b3cac89323216e6f8d7f/crates/syntax/src/ast/token_ext.rs#L616-L662
+// for one way of doing this!
 fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
@@ -92,7 +134,6 @@ fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
             // Must have ":", "$NAME", "$SOMETHING+", ";"
             assert!(data.len() >= 4);
 
-            // TODO: Validate all words are valid at "compile" time!
             let name = data[1].to_lowercase();
 
             // TODO: Doesn't handle "empty" definitions
@@ -103,9 +144,12 @@ fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
             ctxt.dict.insert(name, Arc::new(Word::Compiled(compiled)));
         }
         _ => {
-            for word in compile(ctxt, &data)?.iter() {
-                word.execute(ctxt)?;
-            }
+            // We should interpret this as a line to compile and run
+            // (but then discard, because it isn't bound in the dict)
+            let temp_compiled = Arc::new(
+                Word::Compiled(compile(ctxt, &data)?)
+            );
+            ctxt.push_exec(temp_compiled);
         }
     }
 
@@ -156,6 +200,21 @@ fn bi_cr(_ctxt: &mut Context) -> Result<(), ()> {
     Ok(())
 }
 
+fn bi_jf2(ctxt: &mut Context) -> Result<(), ()> {
+    // So, we need to push the counter of the SECOND
+    // item on the stack forward two items
+    let flow_len = ctxt.flow_stk.len();
+
+    // We must have the current item (this function), AND
+    // a parent
+    assert!(flow_len >= 2);
+    let parent = ctxt.flow_stk.get_mut(flow_len - 2).ok_or(())?;
+
+    parent.idx += 2;
+
+    Ok(())
+}
+
 fn bi_retstk_push(ctxt: &mut Context) -> Result<(), ()> {
     let val = ctxt.data_stk.pop().ok_or(())?;
     ctxt.ret_stk.push(val);
@@ -165,6 +224,13 @@ fn bi_retstk_push(ctxt: &mut Context) -> Result<(), ()> {
 fn bi_retstk_pop(ctxt: &mut Context) -> Result<(), ()> {
     let val = ctxt.ret_stk.pop().ok_or(())?;
     ctxt.data_stk.push(val);
+    Ok(())
+}
+
+fn bi_eq(ctxt: &mut Context) -> Result<(), ()> {
+    let val1 = ctxt.data_stk.pop().ok_or(())?;
+    let val2 = ctxt.data_stk.pop().ok_or(())?;
+    ctxt.data_stk.push(if val1 == val2 { -1 } else { 0 });
     Ok(())
 }
 
@@ -214,6 +280,8 @@ static BUILT_IN_WORDS: &[(&str, Word)] = &[
     ("cr", Word::Builtin(bi_cr)),
     (">r", Word::Builtin(bi_retstk_push)),
     ("r>", Word::Builtin(bi_retstk_pop)),
+    ("=", Word::Builtin(bi_eq)),
+
     // TODO: This requires the ability to modify the input stream!
     //
     // This is supposed to return the address of the NEXT word in the
@@ -247,4 +315,7 @@ static BUILT_IN_WORDS: &[(&str, Word)] = &[
     // Debug
     ("serdump", Word::Builtin(bi_serdump)),
     ("coredump", Word::Builtin(bi_coredump)),
+
+    // Test item to verify control stack
+    ("jf2", Word::Builtin(bi_jf2)),
 ];
