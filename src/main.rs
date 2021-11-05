@@ -11,6 +11,13 @@ pub enum Word {
     LiteralVal(i32),
     Builtin(fn(&mut Context) -> Result<(), ()>),
     Compiled(Vec<Arc<Word>>),
+    UncondRelativeJump {
+        offset: i32,
+    },
+    CondRelativeJump {
+        offset: i32,
+        jump_on: bool,
+    },
 }
 
 struct ExecCtx {
@@ -40,6 +47,8 @@ impl Context {
             None => return StepResult::Done,
         };
 
+        let mut jump = None;
+
         let word: &Word = cur.word.deref();
 
         let to_push = match word {
@@ -56,12 +65,53 @@ impl Context {
                 cur.idx += 1;
                 ret
             },
+            Word::UncondRelativeJump { offset } => {
+                jump = Some(*offset);
+                None
+            }
+            Word::CondRelativeJump { offset, jump_on } => {
+                let topvar = self.data_stk.pop().unwrap();
+
+                // Truth table:
+                // tv == 0 | jump_on | jump?
+                // ========|=========|=======
+                // false   | false   | no
+                // true    | false   | yes
+                // false   | true    | yes
+                // true    | true    | no
+
+                let do_jump = (topvar == 0) ^ jump_on;
+
+                if do_jump {
+                    jump = Some(*offset);
+                }
+                None
+            }
         };
 
         if let Some(push) = to_push {
             self.push_exec(push);
         } else {
             self.flow_stk.pop();
+        }
+
+        if let Some(jump) = jump {
+            // We just popped off the jump command, so now we are back in
+            // the "parent" frame.
+
+            let new_cur = self.flow_stk.last_mut().unwrap();
+
+            if jump < 0 {
+                let abs = jump.abs() as usize;
+
+                assert!(abs <= new_cur.idx);
+
+                new_cur.idx -= abs;
+            } else {
+                let abs = jump as usize;
+                assert_ne!(abs, 0);
+                new_cur.idx = new_cur.idx.checked_add(abs).unwrap();
+            }
         }
 
         StepResult::Working
@@ -117,15 +167,91 @@ fn parse_num(input: &str) -> Option<i32> {
 }
 
 fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
-    data.iter()
-        .map(|w| {
-            ctxt.dict
-                .get(&w.to_lowercase())
-                .cloned()
-                .or_else(|| parse_num(w).map(Word::LiteralVal).map(Arc::new))
-        })
-        .collect::<Option<Vec<Arc<Word>>>>()
-        .ok_or(())
+    let mut output = Vec::new();
+
+    let lowered = data.iter().map(String::as_str).map(str::to_lowercase).collect::<Vec<_>>();
+    let mut if_ct = 0;
+    let mut else_ct = 0;
+    let mut then_ct = 0;
+
+    for (idx, d) in lowered.iter().enumerate() {
+        let comp = match d.as_str() {
+            // First, check for any "Magical" words that do not appear in the dictionary, and need to
+            // be handled in a special way
+            "if" => {
+                // Seek forward to find the then/else
+                let offset = lowered
+                    .iter()
+                    .skip(idx)
+                    .position(|w| ["then", "else"].contains(&w.as_str()))
+                    .ok_or(()).unwrap();
+
+                if_ct += 1;
+
+                let offset = match lowered[idx + offset].as_str() {
+                    // We have to compensate that "then" doesn't actually
+                    // appear in the compiled output
+                    "then" => offset - 1,
+
+                    // Here, there is no "then", but we do have to compensate
+                    // for the unconditional jump that appears where else appears
+                    "else" => offset,
+
+                    _ => panic!(),
+                } as i32;
+
+                Arc::new(Word::CondRelativeJump { offset, jump_on: false })
+            }
+            "else" => {
+                // All we need to do on an else is insert an unconditional jump to the then.
+                let offset = lowered
+                    .iter()
+                    .skip(idx)
+                    .position(|w| w == "then")
+                    .ok_or(()).unwrap();
+
+                // Note: Balance check handled later
+                else_ct += 1;
+
+                // We have to compensate that "then" doesn't actually
+                // appear in the compiled output
+                let offset = offset as i32 - 1;
+
+                Arc::new(Word::UncondRelativeJump { offset })
+            }
+            "then" => {
+                then_ct += 1;
+                // For now, we only using 'then' as a sentinel value for if/else
+                continue;
+            }
+
+            // Now, check for "normal" words, e.g. numeric literals or dictionary words
+            other => {
+                if let Some(dword) = ctxt.dict.get(other).cloned() {
+                    dword
+                } else if let Some(num) = parse_num(other).map(Word::LiteralVal) {
+                    Arc::new(num)
+                } else {
+                    return Err(())
+                }
+            }
+        };
+
+        output.push(comp);
+    }
+
+    // TODO: This probably isn't SUPER robust, but for now is a decent sanity check
+    // that we have properly paired if/then/elses
+    if if_ct != then_ct {
+        panic!("{} {}", if_ct, then_ct);
+        return Err(());
+    }
+    if else_ct > if_ct {
+        panic!();
+        return Err(());
+    }
+
+    Ok(output)
 }
 
 fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
@@ -184,6 +310,8 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), ()> {
             Word::Builtin(_) => println!("(builtin)"),
             Word::Compiled(ucw) => println!("(compiled, len: {})", ucw.len()),
             Word::LiteralVal(lit) => println!("Literal: {}", lit),
+            Word::CondRelativeJump { .. } => println!("COND RELATIVE JUMP! TODO!"),
+            Word::UncondRelativeJump { .. } => println!("UNCOND RELATIVE JUMP! TODO!"),
         }
     }
 
