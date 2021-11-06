@@ -5,6 +5,9 @@ use std::{
     io::{stdin, stdout, Write},
     ops::Deref,
 };
+mod builtins;
+
+use builtins::BUILT_IN_WORDS;
 
 #[derive(Clone)]
 pub enum Word {
@@ -73,13 +76,12 @@ impl Context {
                 let topvar = self.data_stk.pop().unwrap();
 
                 // Truth table:
-                // tv == 0 | jump_on | jump?
+                // tv == 0 | jump_on | jump.unwrap()
                 // ========|=========|=======
                 // false   | false   | no
                 // true    | false   | yes
                 // false   | true    | yes
                 // true    | true    | no
-
                 let do_jump = (topvar == 0) ^ jump_on;
 
                 if do_jump {
@@ -96,6 +98,7 @@ impl Context {
         }
 
         if let Some(jump) = jump {
+            println!("Jumping!");
             // We just popped off the jump command, so now we are back in
             // the "parent" frame.
 
@@ -138,7 +141,7 @@ fn main() -> IoResult<()> {
     }
 
     loop {
-        let input = read()?;
+        let input = read().unwrap();
         evaluate(&mut ctxt, input).unwrap();
         while let StepResult::Working = ctxt.step() {
             // ...
@@ -151,7 +154,7 @@ fn read() -> IoResult<Vec<String>> {
     print!("=> ");
     stdout().flush().ok();
     let mut buf = String::new();
-    stdin().read_line(&mut buf)?;
+    stdin().read_line(&mut buf).unwrap();
 
     Ok(buf.split_whitespace().map(str::to_string).collect())
 }
@@ -173,6 +176,8 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
     let mut if_ct = 0;
     let mut else_ct = 0;
     let mut then_ct = 0;
+    let mut do_ct = 0;
+    let mut loop_ct = 0;
 
     for (idx, d) in lowered.iter().enumerate() {
         let comp = match d.as_str() {
@@ -224,6 +229,32 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                 // For now, we only using 'then' as a sentinel value for if/else
                 continue;
             }
+            "do" => {
+                output.push(Arc::new(Word::Builtin(builtins::bi_retstk_push)));
+                output.push(Arc::new(Word::Builtin(builtins::bi_retstk_push)));
+                do_ct += 1;
+                continue;
+            }
+            "loop" => {
+                output.push(Arc::new(Word::LiteralVal(1)));
+                output.push(Arc::new(Word::Builtin(builtins::bi_add)));
+                output.push(Arc::new(Word::Builtin(builtins::bi_lt)));
+
+                let mut count: usize = do_ct - loop_ct;
+                let offset = lowered[..idx].iter().rev().position(|w| {
+                    if w == "do" {
+                        count = dbg!(dbg!(count).checked_sub(1).unwrap());
+                    }
+
+                    count == 0
+                }).ok_or(()).unwrap();
+
+                loop_ct += 1;
+
+                println!("{} => {}; {}", offset, idx, output.len());
+
+                Arc::new(Word::CondRelativeJump { offset: (-1i32 * offset as i32) - 2, jump_on: true })
+            }
 
             // Now, check for "normal" words, e.g. numeric literals or dictionary words
             other => {
@@ -232,7 +263,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                 } else if let Some(num) = parse_num(other).map(Word::LiteralVal) {
                     Arc::new(num)
                 } else {
-                    return Err(())
+                    panic!() // return Err(())
                 }
             }
         };
@@ -243,12 +274,10 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
     // TODO: This probably isn't SUPER robust, but for now is a decent sanity check
     // that we have properly paired if/then/elses
     if if_ct != then_ct {
-        panic!("{} {}", if_ct, then_ct);
-        return Err(());
+        panic!() // return Err(());
     }
     if else_ct > if_ct {
-        panic!();
-        return Err(());
+        panic!() // return Err(());
     }
 
     Ok(output)
@@ -265,7 +294,7 @@ fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
             // TODO: Doesn't handle "empty" definitions
             let relevant = &data[2..][..data.len() - 3];
 
-            let compiled = compile(ctxt, relevant)?;
+            let compiled = compile(ctxt, relevant).unwrap();
 
             ctxt.dict.insert(name, Arc::new(Word::Compiled(compiled)));
         }
@@ -273,7 +302,7 @@ fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
             let temp_compiled = Arc::new(
-                Word::Compiled(compile(ctxt, &data)?)
+                Word::Compiled(compile(ctxt, &data).unwrap())
             );
             ctxt.push_exec(temp_compiled);
         }
@@ -285,165 +314,3 @@ fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
 fn print() {
     println!(" ok ");
 }
-
-fn bi_emit(ctxt: &mut Context) -> Result<(), ()> {
-    let word = ctxt.data_stk.pop().ok_or(())? as u32;
-    let symbol = std::char::from_u32(word).unwrap_or('‽');
-    print!("{}", symbol);
-    stdout().flush().map_err(drop)
-}
-
-fn bi_coredump(ctxt: &mut Context) -> Result<(), ()> {
-    println!("DATA STACK:");
-    println!("{:08X?}", ctxt.data_stk);
-    println!("");
-
-    println!("RETURN/CONTROL STACK:");
-    println!("{:08X?}", ctxt.ret_stk);
-    println!("");
-
-    println!("DICT:");
-    for (key, word) in ctxt.dict.iter() {
-        print!("  - {:?} => ", key);
-        let word: &Word = word.deref();
-        match word {
-            Word::Builtin(_) => println!("(builtin)"),
-            Word::Compiled(ucw) => println!("(compiled, len: {})", ucw.len()),
-            Word::LiteralVal(lit) => println!("Literal: {}", lit),
-            Word::CondRelativeJump { .. } => println!("COND RELATIVE JUMP! TODO!"),
-            Word::UncondRelativeJump { .. } => println!("UNCOND RELATIVE JUMP! TODO!"),
-        }
-    }
-
-    Ok(())
-}
-
-fn bi_pop(ctxt: &mut Context) -> Result<(), ()> {
-    println!("{}", ctxt.data_stk.pop().ok_or(())?);
-    Ok(())
-}
-
-fn bi_cr(_ctxt: &mut Context) -> Result<(), ()> {
-    println!("");
-    Ok(())
-}
-
-fn bi_jf2(ctxt: &mut Context) -> Result<(), ()> {
-    // So, we need to push the counter of the SECOND
-    // item on the stack forward two items
-    let flow_len = ctxt.flow_stk.len();
-
-    // We must have the current item (this function), AND
-    // a parent
-    assert!(flow_len >= 2);
-    let parent = ctxt.flow_stk.get_mut(flow_len - 2).ok_or(())?;
-
-    parent.idx += 2;
-
-    Ok(())
-}
-
-fn bi_retstk_push(ctxt: &mut Context) -> Result<(), ()> {
-    let val = ctxt.data_stk.pop().ok_or(())?;
-    ctxt.ret_stk.push(val);
-    Ok(())
-}
-
-fn bi_retstk_pop(ctxt: &mut Context) -> Result<(), ()> {
-    let val = ctxt.ret_stk.pop().ok_or(())?;
-    ctxt.data_stk.push(val);
-    Ok(())
-}
-
-fn bi_eq(ctxt: &mut Context) -> Result<(), ()> {
-    let val1 = ctxt.data_stk.pop().ok_or(())?;
-    let val2 = ctxt.data_stk.pop().ok_or(())?;
-    ctxt.data_stk.push(if val1 == val2 { -1 } else { 0 });
-    Ok(())
-}
-
-fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
-    for (name, word) in ctxt.dict.iter() {
-        let word: &Word = word.deref();
-        if let Word::LiteralVal(val) = word {
-            println!(
-                "LIT\t{}\t0x{:08X}\t0x{:016X}",
-                name, *val, word as *const _ as usize
-            );
-        }
-    }
-
-    for (name, word) in ctxt.dict.iter() {
-        let word: &Word = word.deref();
-        if let Word::Builtin(_) = word {
-            println!("BLT\t{}\t{:016X}", name, word as *const _ as usize);
-        }
-    }
-
-    for (name, word) in ctxt.dict.iter() {
-        let word: &Word = word.deref();
-        if let Word::Compiled(words) = word {
-            println!(
-                "CMP\t{}\t{:016X}\t{:016X?}",
-                name,
-                word as *const _ as usize,
-                words
-                    .iter()
-                    .map(|w| {
-                        // TODO: I should probably directly print literals
-                        let word: &Word = w.deref();
-                        word as *const _ as usize
-                    })
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
-
-    Ok(())
-}
-
-static BUILT_IN_WORDS: &[(&str, Word)] = &[
-    ("emit", Word::Builtin(bi_emit)),
-    (".", Word::Builtin(bi_pop)),
-    ("cr", Word::Builtin(bi_cr)),
-    (">r", Word::Builtin(bi_retstk_push)),
-    ("r>", Word::Builtin(bi_retstk_pop)),
-    ("=", Word::Builtin(bi_eq)),
-
-    // TODO: This requires the ability to modify the input stream!
-    //
-    // This is supposed to return the address of the NEXT word in the
-    // input stream
-    //
-    // ("'", Word::Builtin(bi_tick))
-
-    // ( @ is the "load operator )  ok
-    // ( ! is the "store operator" )  ok
-
-    // Constants store a VALUE in the dict, which will be pushed on the stack
-    //
-    // I *think*:
-    //
-    // 5 CONSTANT X
-    //
-    // is equivalent to:
-    //
-    // : X 5 ;
-
-    // Variables store the value, and put the ADDRESS on the stack when invoked
-    //
-    // I *think*:
-    //
-    // 0 VARIABLE ZERO
-    //
-    // is equvalent to:
-    //
-    // ???
-
-    // Debug
-    ("serdump", Word::Builtin(bi_serdump)),
-    ("coredump", Word::Builtin(bi_coredump)),
-
-    // Test item to verify control stack
-    ("jf2", Word::Builtin(bi_jf2)),
-];
