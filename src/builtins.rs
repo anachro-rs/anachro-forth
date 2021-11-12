@@ -1,26 +1,26 @@
-use crate::{Context, Word};
+use crate::{Context, Word, Error};
 use std::ops::Deref;
 use std::fmt::Write;
 
-fn bi_emit(ctxt: &mut Context) -> Result<(), ()> {
-    let word = ctxt.data_stk.pop().ok_or(()).unwrap() as u32;
+fn bi_emit(ctxt: &mut Context) -> Result<(), Error> {
+    let word = ctxt.data_stk.pop()? as u32;
     let symbol = std::char::from_u32(word).unwrap_or('‽');
     ctxt.cur_output += &format!("{}", symbol);
     Ok(())
 }
 
-fn bi_coredump(ctxt: &mut Context) -> Result<(), ()> {
-    writeln!(&mut ctxt.cur_output, "DATA STACK:").unwrap();
-    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.data_stk).unwrap();
-    writeln!(&mut ctxt.cur_output, "").unwrap();
+fn bi_coredump(ctxt: &mut Context) -> Result<(), Error> {
+    writeln!(&mut ctxt.cur_output, "DATA STACK:")?;
+    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.data_stk)?;
+    writeln!(&mut ctxt.cur_output, "")?;
 
-    writeln!(&mut ctxt.cur_output, "RETURN/CONTROL STACK:").unwrap();
-    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.ret_stk).unwrap();
-    writeln!(&mut ctxt.cur_output, "").unwrap();
+    writeln!(&mut ctxt.cur_output, "RETURN/CONTROL STACK:")?;
+    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.ret_stk)?;
+    writeln!(&mut ctxt.cur_output, "")?;
 
-    writeln!(&mut ctxt.cur_output, "DICT:").unwrap();
+    writeln!(&mut ctxt.cur_output, "DICT:")?;
     for (key, word) in ctxt.dict.iter() {
-        write!(&mut ctxt.cur_output, "  - {:?} => ", key).unwrap();
+        write!(&mut ctxt.cur_output, "  - {:?} => ", key)?;
         let word: &Word = word.deref();
         match word {
             Word::Builtin(_) => writeln!(&mut ctxt.cur_output, "(builtin)"),
@@ -28,69 +28,69 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), ()> {
             Word::LiteralVal(lit) => writeln!(&mut ctxt.cur_output, "Literal: {}", lit),
             Word::CondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "COND RELATIVE JUMP! TODO!"),
             Word::UncondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "UNCOND RELATIVE JUMP! TODO!"),
-        }.unwrap();
+        }?;
     }
 
     Ok(())
 }
 
-fn bi_pop(ctxt: &mut Context) -> Result<(), ()> {
-    writeln!(&mut ctxt.cur_output, "{}", ctxt.data_stk.pop().ok_or(()).unwrap()).unwrap();
+fn bi_pop(ctxt: &mut Context) -> Result<(), Error> {
+    writeln!(&mut ctxt.cur_output, "{}", ctxt.data_stk.pop()?)?;
     Ok(())
 }
 
-fn bi_cr(ctxt: &mut Context) -> Result<(), ()> {
-    writeln!(&mut ctxt.cur_output, "").unwrap();
+fn bi_cr(ctxt: &mut Context) -> Result<(), Error> {
+    writeln!(&mut ctxt.cur_output, "")?;
     Ok(())
 }
 
-pub fn bi_lt(ctxt: &mut Context) -> Result<(), ()> {
-    let val2 = ctxt.data_stk.pop().ok_or(()).unwrap();
-    let val1 = ctxt.data_stk.pop().ok_or(()).unwrap();
+pub fn bi_lt(ctxt: &mut Context) -> Result<(), Error> {
+    let val2 = ctxt.data_stk.pop()?;
+    let val1 = ctxt.data_stk.pop()?;
     ctxt.data_stk.push(if val1 < val2 { -1 } else { 0 });
     Ok(())
 }
 
-pub fn bi_gt(ctxt: &mut Context) -> Result<(), ()> {
-    let val2 = ctxt.data_stk.pop().ok_or(()).unwrap();
-    let val1 = ctxt.data_stk.pop().ok_or(()).unwrap();
+pub fn bi_gt(ctxt: &mut Context) -> Result<(), Error> {
+    let val2 = ctxt.data_stk.pop()?;
+    let val1 = ctxt.data_stk.pop()?;
     ctxt.data_stk.push(if val1 > val2 { -1 } else { 0 });
     Ok(())
 }
 
-pub fn bi_retstk_push(ctxt: &mut Context) -> Result<(), ()> {
-    let val = ctxt.data_stk.pop().ok_or(()).unwrap();
+pub fn bi_retstk_push(ctxt: &mut Context) -> Result<(), Error> {
+    let val = ctxt.data_stk.pop()?;
     ctxt.ret_stk.push(val);
     Ok(())
 }
 
-pub fn bi_retstk_pop(ctxt: &mut Context) -> Result<(), ()> {
-    let val = ctxt.ret_stk.pop().ok_or(()).unwrap();
+pub fn bi_retstk_pop(ctxt: &mut Context) -> Result<(), Error> {
+    let val = ctxt.ret_stk.pop()?;
     ctxt.data_stk.push(val);
     Ok(())
 }
 
-fn bi_eq(ctxt: &mut Context) -> Result<(), ()> {
-    let val1 = ctxt.data_stk.pop().ok_or(()).unwrap();
-    let val2 = ctxt.data_stk.pop().ok_or(()).unwrap();
+fn bi_eq(ctxt: &mut Context) -> Result<(), Error> {
+    let val1 = ctxt.data_stk.pop()?;
+    let val2 = ctxt.data_stk.pop()?;
     ctxt.data_stk.push(if val1 == val2 { -1 } else { 0 });
     Ok(())
 }
 
-pub fn bi_add(ctxt: &mut Context) -> Result<(), ()> {
-    let val1 = ctxt.data_stk.pop().ok_or(()).unwrap();
-    let val2 = ctxt.data_stk.pop().ok_or(()).unwrap();
+pub fn bi_add(ctxt: &mut Context) -> Result<(), Error> {
+    let val1 = ctxt.data_stk.pop()?;
+    let val2 = ctxt.data_stk.pop()?;
     ctxt.data_stk.push(val1.wrapping_add(val2));
     Ok(())
 }
 
-fn bi_dup(ctxt: &mut Context) -> Result<(), ()> {
-    let val1 = ctxt.data_stk.last().ok_or(()).unwrap().clone();
+pub fn bi_dup(ctxt: &mut Context) -> Result<(), Error> {
+    let val1 = ctxt.data_stk.last()?.clone();
     ctxt.data_stk.push(val1);
     Ok(())
 }
 
-fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
+fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
     for (name, word) in ctxt.dict.iter() {
         let word: &Word = word.deref();
         if let Word::LiteralVal(val) = word {
@@ -98,7 +98,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
                 &mut ctxt.cur_output,
                 "LIT\t{}\t0x{:08X}\t0x{:016X}",
                 name, *val, word as *const _ as usize
-            ).unwrap();
+            )?;
         }
     }
 
@@ -110,7 +110,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
                 "BLT\t{}\t{:016X}",
                 name,
                 word as *const _ as usize
-            ).unwrap();
+            )?;
         }
     }
 
@@ -130,7 +130,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
                         word as *const _ as usize
                     })
                     .collect::<Vec<_>>()
-            ).unwrap();
+            )?;
         }
     }
 

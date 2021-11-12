@@ -3,10 +3,52 @@ use std::{collections::BTreeMap, ops::Deref};
 
 pub mod builtins;
 
+#[derive(Debug, Clone)]
+pub enum Error {
+    /// Failed to write to the "stdout" style output
+    OutputFormat,
+
+    /// Failed to read from the "stdin" style input
+    Input,
+
+    /// Data stack underflowed
+    DataStackUnderflow,
+
+    /// Data stack was empty
+    DataStackEmpty,
+
+    /// Return stack was empty
+    RetStackEmpty,
+
+    /// Flow/Execution stack was empty
+    FlowStackEmpty,
+
+    /// Some kind of checked math failed
+    BadMath,
+
+    /// We found an "if" without an appropriate pair
+    MissingIfPair,
+
+    /// We found an "else" without an appropriate pair
+    MissingElsePair,
+
+    /// We found a "loop" without an appropriate pair
+    MissingLoopPair,
+
+    /// We found a "do" without an appropriate pair
+    MissingDoPair,
+}
+
+impl From<core::fmt::Error> for Error {
+    fn from(_other: core::fmt::Error) -> Self {
+        Self::OutputFormat
+    }
+}
+
 #[derive(Clone)]
 pub enum Word {
     LiteralVal(i32),
-    Builtin(fn(&mut Context) -> Result<(), ()>),
+    Builtin(fn(&mut Context) -> Result<(), Error>),
     Compiled(Vec<Arc<Word>>),
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
@@ -17,8 +59,38 @@ pub struct ExecCtx {
     word: Arc<Word>,
 }
 
-type Stack = Vec<i32>;
 type Dict = BTreeMap<String, Arc<Word>>;
+
+#[derive(Debug)]
+pub struct Stack {
+    data: Vec<i32>,
+    err: Error,
+}
+
+impl Stack {
+    pub fn new(err: Error) -> Self {
+        Stack {
+            data: Vec::new(),
+            err,
+        }
+    }
+
+    pub fn push(&mut self, data: i32) {
+        self.data.push(data);
+    }
+
+    pub fn pop(&mut self) -> Result<i32, Error> {
+        self.data.pop().ok_or(Error::DataStackUnderflow)
+    }
+
+    pub fn last(&self) -> Result<&i32, Error> {
+        self.data.last().ok_or(self.err.clone())
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+}
 
 pub struct Context {
     data_stk: Stack,
@@ -48,8 +120,8 @@ impl Context {
 
     pub fn with_builtins(bi: &[(&str, Word)]) -> Self {
         let mut new = Context {
-            data_stk: Vec::new(),
-            ret_stk: Vec::new(),
+            data_stk: Stack::new(Error::DataStackEmpty),
+            ret_stk: Stack::new(Error::RetStackEmpty),
             flow_stk: Vec::new(),
             dict: BTreeMap::new(),
             cur_output: String::new(),
@@ -62,10 +134,10 @@ impl Context {
         new
     }
 
-    pub fn step(&mut self) -> StepResult {
+    pub fn step(&mut self) -> Result<StepResult, Error> {
         let cur = match self.flow_stk.last_mut() {
             Some(frame) => frame,
-            None => return StepResult::Done,
+            None => return Ok(StepResult::Done),
         };
 
         let mut jump = None;
@@ -78,7 +150,7 @@ impl Context {
                 None
             }
             Word::Builtin(func) => {
-                func(self).unwrap();
+                func(self)?;
                 None
             }
             Word::Compiled(words) => {
@@ -91,10 +163,10 @@ impl Context {
                 None
             }
             Word::CondRelativeJump { offset, jump_on } => {
-                let topvar = self.data_stk.pop().unwrap();
+                let topvar = self.data_stk.pop()?;
 
                 // Truth table:
-                // tv == 0 | jump_on | jump.unwrap()
+                // tv == 0 | jump_on | jump
                 // ========|=========|=======
                 // false   | false   | no
                 // true    | false   | yes
@@ -119,7 +191,7 @@ impl Context {
             // We just popped off the jump command, so now we are back in
             // the "parent" frame.
 
-            let new_cur = self.flow_stk.last_mut().unwrap();
+            let new_cur = self.flow_stk.last_mut().ok_or(Error::FlowStackEmpty)?;
 
             if jump < 0 {
                 let abs = jump.abs() as usize;
@@ -130,11 +202,11 @@ impl Context {
             } else {
                 let abs = jump as usize;
                 assert_ne!(abs, 0);
-                new_cur.idx = new_cur.idx.checked_add(abs).unwrap();
+                new_cur.idx = new_cur.idx.checked_add(abs).ok_or(Error::BadMath)?;
             }
         }
 
-        StepResult::Working
+        Ok(StepResult::Working)
     }
 
     pub fn push_exec(&mut self, word: Arc<Word>) {
@@ -158,7 +230,7 @@ fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
 
-fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
+fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error> {
     let mut output = Vec::new();
 
     let lowered = data
@@ -182,8 +254,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                     .iter()
                     .skip(idx)
                     .position(|w| ["then", "else"].contains(&w.as_str()))
-                    .ok_or(())
-                    .unwrap();
+                    .ok_or(Error::MissingIfPair)?;
 
                 if_ct += 1;
 
@@ -210,8 +281,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                     .iter()
                     .skip(idx)
                     .position(|w| w == "then")
-                    .ok_or(())
-                    .unwrap();
+                    .ok_or(Error::MissingElsePair)?;
 
                 // Note: Balance check handled later
                 else_ct += 1;
@@ -244,13 +314,16 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                     .rev()
                     .position(|w| {
                         if w == "do" {
-                            count = dbg!(dbg!(count).checked_sub(1).unwrap());
+                            if let Some(amt) = count.checked_sub(1) {
+                                count = amt;
+                            } else {
+                                return false;
+                            }
                         }
 
                         count == 0
                     })
-                    .ok_or(())
-                    .unwrap();
+                    .ok_or(Error::MissingLoopPair)?;
 
                 loop_ct += 1;
 
@@ -287,7 +360,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
     Ok(output)
 }
 
-pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
+pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
     match (data.first(), data.last()) {
         (Some(f), Some(l)) if f == ":" && l == ";" => {
             // Must have ":", "$NAME", "$SOMETHING+", ";"
@@ -298,14 +371,14 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), ()> {
             // TODO: Doesn't handle "empty" definitions
             let relevant = &data[2..][..data.len() - 3];
 
-            let compiled = compile(ctxt, relevant).unwrap();
+            let compiled = compile(ctxt, relevant)?;
 
             ctxt.dict.insert(name, Arc::new(Word::Compiled(compiled)));
         }
         _ => {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
-            let temp_compiled = Arc::new(Word::Compiled(compile(ctxt, &data).unwrap()));
+            let temp_compiled = Arc::new(Word::Compiled(compile(ctxt, &data)?));
             ctxt.push_exec(temp_compiled);
         }
     }

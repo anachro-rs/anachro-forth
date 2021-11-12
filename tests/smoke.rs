@@ -38,7 +38,7 @@ fn single_lines() {
         let mut ctxt = Context::with_builtins(BUILT_IN_WORDS);
             println!("{:?} => {:?}", cases, output);
             evaluate(&mut ctxt, s(cases)).unwrap();
-            while let StepResult::Working = ctxt.step() {
+            while let Ok(StepResult::Working) = ctxt.step() {
                 // ...
             }
             assert_eq!(
