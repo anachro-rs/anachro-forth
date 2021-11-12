@@ -1,8 +1,34 @@
 use forth_hax::{Context, builtins::BUILT_IN_WORDS, evaluate, StepResult};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
+    // Basic output
     ("42 emit", "*"),
+
+    // Basic compilation
     (": 42 emit ;", ""),
+
+    // Basic if
+    ("0 if 42 emit then", ""),
+    ("1 if 42 emit then", "*"),
+    ("0 42 emit if 42 emit then 42 emit", "**"),
+    ("1 42 emit if 42 emit then 42 emit", "***"),
+
+    // Basic if/else
+    ("0 if 42 emit else 42 emit 42 emit then", "**"),
+    ("1 if 42 emit else 42 emit 42 emit then", "*"),
+    ("0 42 emit if 42 emit else 42 emit 42 emit then 42 emit", "****"),
+    ("1 42 emit if 42 emit else 42 emit 42 emit then 42 emit", "***"),
+
+    // Comparison operators
+    ("0 1 < if 42 emit then", "*"),
+    ("1 0 < if 42 emit then", ""),
+    ("0 1 > if 42 emit then", ""),
+    ("1 0 > if 42 emit then", "*"),
+    ("1 0 = if 42 emit then", ""),
+    ("0 1 = if 42 emit then", ""),
+    ("1 1 = if 42 emit then", "*"),
+    ("0 0 = if 42 emit then", "*"),
+
 ];
 
 /// Creates a clean engine
