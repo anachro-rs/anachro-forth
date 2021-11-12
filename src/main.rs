@@ -13,7 +13,7 @@ fn main() -> IoResult<()> {
         while let StepResult::Working = ctxt.step() {
             // ...
         }
-        print();
+        print(&mut ctxt);
     }
 }
 
@@ -26,6 +26,7 @@ fn read() -> IoResult<Vec<String>> {
     Ok(buf.split_whitespace().map(str::to_string).collect())
 }
 
-fn print() {
+fn print(ctxt: &mut Context) {
+    print!("{}", ctxt.output());
     println!(" ok ");
 }

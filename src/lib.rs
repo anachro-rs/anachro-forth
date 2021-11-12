@@ -12,7 +12,7 @@ pub enum Word {
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-struct ExecCtx {
+pub struct ExecCtx {
     idx: usize,
     word: Arc<Word>,
 }
@@ -25,6 +25,7 @@ pub struct Context {
     ret_stk: Stack,
     flow_stk: Vec<ExecCtx>,
     dict: Dict,
+    cur_output: String,
 }
 
 pub enum StepResult {
@@ -33,12 +34,25 @@ pub enum StepResult {
 }
 
 impl Context {
+    pub fn data_stack(&self) -> &Stack {
+        &self.data_stk
+    }
+
+    pub fn return_stack(&self) -> &Stack {
+        &self.ret_stk
+    }
+
+    pub fn flow_stack(&self) -> &[ExecCtx] {
+        &self.flow_stk
+    }
+
     pub fn with_builtins(bi: &[(&str, Word)]) -> Self {
         let mut new = Context {
             data_stk: Vec::new(),
             ret_stk: Vec::new(),
             flow_stk: Vec::new(),
             dict: BTreeMap::new(),
+            cur_output: String::new(),
         };
 
         for (word, func) in bi {
@@ -102,7 +116,6 @@ impl Context {
         }
 
         if let Some(jump) = jump {
-            println!("Jumping!");
             // We just popped off the jump command, so now we are back in
             // the "parent" frame.
 
@@ -126,6 +139,12 @@ impl Context {
 
     pub fn push_exec(&mut self, word: Arc<Word>) {
         self.flow_stk.push(ExecCtx { idx: 0, word });
+    }
+
+    pub fn output(&mut self) -> String {
+        let mut new_out = String::new();
+        core::mem::swap(&mut self.cur_output, &mut new_out);
+        new_out
     }
 }
 
@@ -234,8 +253,6 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, ()> {
                     .unwrap();
 
                 loop_ct += 1;
-
-                println!("{} => {}; {}", offset, idx, output.len());
 
                 Arc::new(Word::CondRelativeJump {
                     offset: (-1i32 * offset as i32) - 2,

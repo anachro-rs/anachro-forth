@@ -1,48 +1,46 @@
 use crate::{Context, Word};
-use std::{
-    io::{stdout, Write},
-    ops::Deref,
-};
+use std::ops::Deref;
+use std::fmt::Write;
 
 fn bi_emit(ctxt: &mut Context) -> Result<(), ()> {
     let word = ctxt.data_stk.pop().ok_or(()).unwrap() as u32;
     let symbol = std::char::from_u32(word).unwrap_or('‽');
-    print!("{}", symbol);
-    stdout().flush().map_err(drop)
+    ctxt.cur_output += &format!("{}", symbol);
+    Ok(())
 }
 
 fn bi_coredump(ctxt: &mut Context) -> Result<(), ()> {
-    println!("DATA STACK:");
-    println!("{:08X?}", ctxt.data_stk);
-    println!("");
+    writeln!(&mut ctxt.cur_output, "DATA STACK:").unwrap();
+    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.data_stk).unwrap();
+    writeln!(&mut ctxt.cur_output, "").unwrap();
 
-    println!("RETURN/CONTROL STACK:");
-    println!("{:08X?}", ctxt.ret_stk);
-    println!("");
+    writeln!(&mut ctxt.cur_output, "RETURN/CONTROL STACK:").unwrap();
+    writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.ret_stk).unwrap();
+    writeln!(&mut ctxt.cur_output, "").unwrap();
 
-    println!("DICT:");
+    writeln!(&mut ctxt.cur_output, "DICT:").unwrap();
     for (key, word) in ctxt.dict.iter() {
-        print!("  - {:?} => ", key);
+        write!(&mut ctxt.cur_output, "  - {:?} => ", key).unwrap();
         let word: &Word = word.deref();
         match word {
-            Word::Builtin(_) => println!("(builtin)"),
-            Word::Compiled(ucw) => println!("(compiled, len: {})", ucw.len()),
-            Word::LiteralVal(lit) => println!("Literal: {}", lit),
-            Word::CondRelativeJump { .. } => println!("COND RELATIVE JUMP! TODO!"),
-            Word::UncondRelativeJump { .. } => println!("UNCOND RELATIVE JUMP! TODO!"),
-        }
+            Word::Builtin(_) => writeln!(&mut ctxt.cur_output, "(builtin)"),
+            Word::Compiled(ucw) => writeln!(&mut ctxt.cur_output, "(compiled, len: {})", ucw.len()),
+            Word::LiteralVal(lit) => writeln!(&mut ctxt.cur_output, "Literal: {}", lit),
+            Word::CondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "COND RELATIVE JUMP! TODO!"),
+            Word::UncondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "UNCOND RELATIVE JUMP! TODO!"),
+        }.unwrap();
     }
 
     Ok(())
 }
 
 fn bi_pop(ctxt: &mut Context) -> Result<(), ()> {
-    println!("{}", ctxt.data_stk.pop().ok_or(()).unwrap());
+    writeln!(&mut ctxt.cur_output, "{}", ctxt.data_stk.pop().ok_or(()).unwrap()).unwrap();
     Ok(())
 }
 
-fn bi_cr(_ctxt: &mut Context) -> Result<(), ()> {
-    println!("");
+fn bi_cr(ctxt: &mut Context) -> Result<(), ()> {
+    writeln!(&mut ctxt.cur_output, "").unwrap();
     Ok(())
 }
 
@@ -96,24 +94,31 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
     for (name, word) in ctxt.dict.iter() {
         let word: &Word = word.deref();
         if let Word::LiteralVal(val) = word {
-            println!(
+            writeln!(
+                &mut ctxt.cur_output,
                 "LIT\t{}\t0x{:08X}\t0x{:016X}",
                 name, *val, word as *const _ as usize
-            );
+            ).unwrap();
         }
     }
 
     for (name, word) in ctxt.dict.iter() {
         let word: &Word = word.deref();
         if let Word::Builtin(_) = word {
-            println!("BLT\t{}\t{:016X}", name, word as *const _ as usize);
+            writeln!(
+                &mut ctxt.cur_output,
+                "BLT\t{}\t{:016X}",
+                name,
+                word as *const _ as usize
+            ).unwrap();
         }
     }
 
     for (name, word) in ctxt.dict.iter() {
         let word: &Word = word.deref();
         if let Word::Compiled(words) = word {
-            println!(
+            writeln!(
+                &mut ctxt.cur_output,
                 "CMP\t{}\t{:016X}\t{:016X?}",
                 name,
                 word as *const _ as usize,
@@ -125,7 +130,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), ()> {
                         word as *const _ as usize
                     })
                     .collect::<Vec<_>>()
-            );
+            ).unwrap();
         }
     }
 
