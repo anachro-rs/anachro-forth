@@ -30,6 +30,11 @@ const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     ("0 1 = if 42 emit then", ""),
     ("1 1 = if 42 emit then", "*"),
     ("0 0 = if 42 emit then", "*"),
+
+    // Nested loops - doesn't work!
+    // ("0 0 if 42 emit if 42 emit else 42 emit 42 emit then then", ""),
+    // ("1 0 if 42 emit if 42 emit else 42 emit 42 emit then then", "***"),
+    // ("1 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "**"),
 ];
 
 const MULTI_LINE_CASES: &[(&str, &str)] = &[
@@ -55,6 +60,16 @@ const MULTI_LINE_CASES: &[(&str, &str)] = &[
         "#,
         "************",
     ),
+
+    // Nested loops: Not working!
+    // (
+    //     r#"
+    //         : star 42 emit ;
+    //         : test 10 0 do 10 0 do star loop loop ;
+    //         test
+    //     "#,
+    //     "************",
+    // ),
 ];
 
 /// Creates a clean engine
