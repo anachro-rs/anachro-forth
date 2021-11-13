@@ -87,6 +87,10 @@ impl Stack {
         self.data.last().ok_or(self.err.clone())
     }
 
+    pub fn get_mut(&mut self, index: usize) -> Result<&mut i32, Error> {
+        self.data.get_mut(index).ok_or(self.err.clone())
+    }
+
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -135,6 +139,18 @@ impl Context {
     }
 
     pub fn step(&mut self) -> Result<StepResult, Error> {
+        match self.step_inner() {
+            Ok(r) => Ok(r),
+            Err(e) => {
+                self.flow_stk.clear();
+                while let Ok(_) = self.data_stk.pop() {}
+                while let Ok(_) = self.ret_stk.pop() {}
+                Err(e)
+            }
+        }
+    }
+
+    fn step_inner(&mut self) -> Result<StepResult, Error> {
         let cur = match self.flow_stk.last_mut() {
             Some(frame) => frame,
             None => return Ok(StepResult::Done),
@@ -174,8 +190,13 @@ impl Context {
                 // true    | true    | no
                 let do_jump = (topvar == 0) ^ jump_on;
 
+                println!("topvar: {}, jump_on: {}", topvar, jump_on);
+
                 if do_jump {
+                    println!("Jumping!");
                     jump = Some(*offset);
+                } else {
+                    println!("Not Jumping!");
                 }
                 None
             }
@@ -304,9 +325,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 continue;
             }
             "loop" => {
-                output.push(Arc::new(Word::LiteralVal(1)));
-                output.push(Arc::new(Word::Builtin(builtins::bi_add)));
-                output.push(Arc::new(Word::Builtin(builtins::bi_gt)));
+                output.push(Arc::new(Word::Builtin(builtins::bi_priv_loop)));
 
                 let mut count: usize = do_ct - loop_ct;
                 let offset = lowered[..idx]
@@ -329,7 +348,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
 
                 Arc::new(Word::CondRelativeJump {
                     offset: (-1i32 * offset as i32) - 2,
-                    jump_on: true,
+                    jump_on: false,
                 })
             }
 

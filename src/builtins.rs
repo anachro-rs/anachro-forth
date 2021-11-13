@@ -1,6 +1,6 @@
-use crate::{Context, Word, Error};
-use std::ops::Deref;
+use crate::{Context, Error, Word};
 use std::fmt::Write;
+use std::ops::Deref;
 
 fn bi_emit(ctxt: &mut Context) -> Result<(), Error> {
     let word = ctxt.data_stk.pop()? as u32;
@@ -18,6 +18,10 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), Error> {
     writeln!(&mut ctxt.cur_output, "{:08X?}", ctxt.ret_stk)?;
     writeln!(&mut ctxt.cur_output, "")?;
 
+    writeln!(&mut ctxt.cur_output, "FLOW STACK LEN:")?;
+    writeln!(&mut ctxt.cur_output, "{}", ctxt.flow_stk.len())?;
+    writeln!(&mut ctxt.cur_output, "")?;
+
     writeln!(&mut ctxt.cur_output, "DICT:")?;
     for (key, word) in ctxt.dict.iter() {
         write!(&mut ctxt.cur_output, "  - {:?} => ", key)?;
@@ -26,8 +30,12 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), Error> {
             Word::Builtin(_) => writeln!(&mut ctxt.cur_output, "(builtin)"),
             Word::Compiled(ucw) => writeln!(&mut ctxt.cur_output, "(compiled, len: {})", ucw.len()),
             Word::LiteralVal(lit) => writeln!(&mut ctxt.cur_output, "Literal: {}", lit),
-            Word::CondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "COND RELATIVE JUMP! TODO!"),
-            Word::UncondRelativeJump { .. } => writeln!(&mut ctxt.cur_output, "UNCOND RELATIVE JUMP! TODO!"),
+            Word::CondRelativeJump { .. } => {
+                writeln!(&mut ctxt.cur_output, "COND RELATIVE JUMP! TODO!")
+            }
+            Word::UncondRelativeJump { .. } => {
+                writeln!(&mut ctxt.cur_output, "UNCOND RELATIVE JUMP! TODO!")
+            }
         }?;
     }
 
@@ -90,6 +98,64 @@ pub fn bi_dup(ctxt: &mut Context) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn bi_retstk_dup(ctxt: &mut Context) -> Result<(), Error> {
+    let val1 = ctxt.ret_stk.last()?.clone();
+    ctxt.ret_stk.push(val1);
+    Ok(())
+}
+
+pub fn bi_retstk_2dup(ctxt: &mut Context) -> Result<(), Error> {
+    let len = ctxt.ret_stk.len();
+    if len < 2 {
+        return Err(Error::RetStackEmpty);
+    }
+
+    for _ in 0..2 {
+        let bot = ctxt
+            .ret_stk
+            .data
+            .get(len - 2)
+            .ok_or(Error::RetStackEmpty)?
+            .clone();
+        ctxt.ret_stk.data.push(bot);
+    }
+
+    Ok(())
+}
+
+pub fn bi_retstk_swap(ctxt: &mut Context) -> Result<(), Error> {
+    let len = ctxt.ret_stk.len();
+    if len < 2 {
+        return Err(Error::RetStackEmpty);
+    }
+
+    let top = ctxt.ret_stk.pop()?;
+    let bot = ctxt.ret_stk.pop()?;
+    ctxt.ret_stk.push(top);
+    ctxt.ret_stk.push(bot);
+
+    Ok(())
+}
+
+pub fn bi_priv_loop(ctxt: &mut Context) -> Result<(), Error> {
+    let lmt = ctxt.ret_stk.pop()?;
+    let mut idx = ctxt.ret_stk.pop()?;
+
+    println!("lmt: {}, idx: {}", lmt, idx);
+
+    idx = idx.checked_add(1).ok_or(Error::BadMath)?;
+
+    if idx == lmt {
+        ctxt.data_stk.push(-1);
+    } else {
+        ctxt.data_stk.push(0);
+        ctxt.ret_stk.push(idx);
+        ctxt.ret_stk.push(lmt);
+    }
+
+    Ok(())
+}
+
 fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
     for (name, word) in ctxt.dict.iter() {
         let word: &Word = word.deref();
@@ -108,8 +174,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
             writeln!(
                 &mut ctxt.cur_output,
                 "BLT\t{}\t{:016X}",
-                name,
-                word as *const _ as usize
+                name, word as *const _ as usize
             )?;
         }
     }

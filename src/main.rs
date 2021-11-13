@@ -10,10 +10,17 @@ fn main() -> Result<(), forth_hax::Error> {
     loop {
         let input = read().map_err(|_| Error::Input)?;
         evaluate(&mut ctxt, input)?;
-        while let Ok(StepResult::Working) = ctxt.step() {
-            // ...
-        }
-        print(&mut ctxt);
+        let is_ok = loop {
+            match ctxt.step() {
+                Ok(StepResult::Working) => {}
+                Ok(StepResult::Done) => break true,
+                Err(e) => {
+                    eprintln!("ERROR! -> {:?}", e);
+                    break false;
+                }
+            }
+        };
+        print(&mut ctxt, is_ok);
     }
 }
 
@@ -26,7 +33,11 @@ fn read() -> IoResult<Vec<String>> {
     Ok(buf.split_whitespace().map(str::to_string).collect())
 }
 
-fn print(ctxt: &mut Context) {
+fn print(ctxt: &mut Context, good: bool) {
     print!("{}", ctxt.output());
-    println!(" ok ");
+    if good {
+        println!(" ok ");
+    } else {
+        println!(" bad ");
+    }
 }
