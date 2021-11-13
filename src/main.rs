@@ -20,6 +20,7 @@ fn main() -> Result<(), forth_hax::Error> {
                 }
             }
         };
+        ctxt.serialize();
         print(&mut ctxt, is_ok);
     }
 }

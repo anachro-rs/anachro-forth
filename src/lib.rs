@@ -48,10 +48,48 @@ impl From<core::fmt::Error> for Error {
 #[derive(Clone)]
 pub enum Word {
     LiteralVal(i32),
-    Builtin(fn(&mut Context) -> Result<(), Error>),
+    Builtin {
+        name: String,
+        func: fn(&mut Context) -> Result<(), Error>,
+    },
     Compiled(Vec<Arc<Word>>),
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
+}
+
+impl Word {
+    fn serialize(&self) {
+        match self {
+            Word::LiteralVal(lit) => println!("LIT({})", lit),
+            Word::Builtin{ func: bi, .. } => {
+                let mut found = false;
+                for (idx, name, wrd) in builtins::BUILT_IN_WORDS {
+                    // if let Word::Builtin { func: biw, .. } = wrd {
+                    //     // lol
+                    //     let biwer = biw as *const _ as usize;
+                    //     let bier = bi as *const _ as usize;
+                    //     println!("{} => {:016X}, {:016X}", name, biwer, bier);
+                    //     if biwer == bier {
+                    //         found = true;
+                    //         println!("BI({}, {})", idx, name);
+                    //         break;
+                    //     }
+                    // }
+                }
+                // assert!(found);
+                if !found {
+                    println!("???");
+                }
+            },
+            Word::Compiled(comp) => {
+                for c in comp.iter() {
+                    c.serialize();
+                }
+            },
+            Word::UncondRelativeJump { offset } => println!("UCRJ({})", offset),
+            Word::CondRelativeJump { offset, jump_on } => println!("CRJ({}, on: {})", offset, jump_on),
+        }
+    }
 }
 
 pub struct ExecCtx {
@@ -59,7 +97,26 @@ pub struct ExecCtx {
     word: Arc<Word>,
 }
 
-type Dict = BTreeMap<String, Arc<Word>>;
+pub struct Dict {
+    pub(crate) data: BTreeMap<String, Arc<Word>>,
+}
+
+impl Dict {
+    pub fn new() -> Self {
+        Self {
+            data: BTreeMap::new(),
+        }
+    }
+
+    pub fn serialize(&self) {
+        let new = self.clone();
+
+        for (word, val) in new.data.iter() {
+            print!("{} => ", word);
+            val.serialize();
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Stack {
@@ -110,6 +167,10 @@ pub enum StepResult {
 }
 
 impl Context {
+    pub fn serialize(&self) {
+        self.dict.serialize()
+    }
+
     pub fn data_stack(&self) -> &Stack {
         &self.data_stk
     }
@@ -122,17 +183,17 @@ impl Context {
         &self.flow_stk
     }
 
-    pub fn with_builtins(bi: &[(&str, Word)]) -> Self {
+    pub fn with_builtins(bi: &[(usize, &str, fn(&mut Context) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
             data_stk: Stack::new(Error::DataStackEmpty),
             ret_stk: Stack::new(Error::RetStackEmpty),
             flow_stk: Vec::new(),
-            dict: BTreeMap::new(),
+            dict: Dict::new(),
             cur_output: String::new(),
         };
 
-        for (word, func) in bi {
-            new.dict.insert(word.to_string(), Arc::new(func.clone()));
+        for (_idx, word, func) in bi {
+            new.dict.data.insert(word.to_string(), Arc::new(Word::Builtin(func)));
         }
 
         new
@@ -165,7 +226,7 @@ impl Context {
                 self.data_stk.push(*lit);
                 None
             }
-            Word::Builtin(func) => {
+            Word::Builtin { func, .. } => {
                 func(self)?;
                 None
             }
@@ -319,13 +380,13 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 continue;
             }
             "do" => {
-                output.push(Arc::new(Word::Builtin(builtins::bi_retstk_push)));
-                output.push(Arc::new(Word::Builtin(builtins::bi_retstk_push)));
+                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_retstk_push }));
+                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_retstk_push }));
                 do_ct += 1;
                 continue;
             }
             "loop" => {
-                output.push(Arc::new(Word::Builtin(builtins::bi_priv_loop)));
+                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_priv_loop }));
 
                 let mut count: usize = do_ct - loop_ct;
                 let offset = lowered[..idx]
@@ -354,7 +415,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
 
             // Now, check for "normal" words, e.g. numeric literals or dictionary words
             other => {
-                if let Some(dword) = ctxt.dict.get(other).cloned() {
+                if let Some(dword) = ctxt.dict.data.get(other).cloned() {
                     dword
                 } else if let Some(num) = parse_num(other).map(Word::LiteralVal) {
                     Arc::new(num)
@@ -392,7 +453,7 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
 
             let compiled = compile(ctxt, relevant)?;
 
-            ctxt.dict.insert(name, Arc::new(Word::Compiled(compiled)));
+            ctxt.dict.data.insert(name, Arc::new(Word::Compiled(compiled)));
         }
         _ => {
             // We should interpret this as a line to compile and run

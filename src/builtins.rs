@@ -23,11 +23,11 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), Error> {
     writeln!(&mut ctxt.cur_output, "")?;
 
     writeln!(&mut ctxt.cur_output, "DICT:")?;
-    for (key, word) in ctxt.dict.iter() {
+    for (key, word) in ctxt.dict.data.iter() {
         write!(&mut ctxt.cur_output, "  - {:?} => ", key)?;
         let word: &Word = word.deref();
         match word {
-            Word::Builtin(_) => writeln!(&mut ctxt.cur_output, "(builtin)"),
+            Word::Builtin { .. } => writeln!(&mut ctxt.cur_output, "(builtin)"),
             Word::Compiled(ucw) => writeln!(&mut ctxt.cur_output, "(compiled, len: {})", ucw.len()),
             Word::LiteralVal(lit) => writeln!(&mut ctxt.cur_output, "Literal: {}", lit),
             Word::CondRelativeJump { .. } => {
@@ -157,7 +157,7 @@ pub fn bi_priv_loop(ctxt: &mut Context) -> Result<(), Error> {
 }
 
 fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
-    for (name, word) in ctxt.dict.iter() {
+    for (name, word) in ctxt.dict.data.iter() {
         let word: &Word = word.deref();
         if let Word::LiteralVal(val) = word {
             writeln!(
@@ -168,9 +168,9 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
         }
     }
 
-    for (name, word) in ctxt.dict.iter() {
+    for (name, word) in ctxt.dict.data.iter() {
         let word: &Word = word.deref();
-        if let Word::Builtin(_) = word {
+        if let Word::Builtin { .. } = word {
             writeln!(
                 &mut ctxt.cur_output,
                 "BLT\t{}\t{:016X}",
@@ -179,7 +179,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
         }
     }
 
-    for (name, word) in ctxt.dict.iter() {
+    for (name, word) in ctxt.dict.data.iter() {
         let word: &Word = word.deref();
         if let Word::Compiled(words) = word {
             writeln!(
@@ -202,23 +202,23 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
     Ok(())
 }
 
-pub static BUILT_IN_WORDS: &[(&str, Word)] = &[
-    ("emit", Word::Builtin(bi_emit)),
-    (".", Word::Builtin(bi_pop)),
-    ("cr", Word::Builtin(bi_cr)),
-    (">r", Word::Builtin(bi_retstk_push)),
-    ("r>", Word::Builtin(bi_retstk_pop)),
-    ("=", Word::Builtin(bi_eq)),
-    ("<", Word::Builtin(bi_lt)),
-    (">", Word::Builtin(bi_gt)),
-    ("dup", Word::Builtin(bi_dup)),
-    ("+", Word::Builtin(bi_add)),
+pub static BUILT_IN_WORDS: &[(usize, &str, fn(&mut Context) -> Result<(), Error>)] = &[
+    (0, "emit", bi_emit),
+    (1, ".", bi_pop),
+    (2, "cr", bi_cr),
+    (3, ">r", bi_retstk_push),
+    (4, "r>", bi_retstk_pop),
+    (5, "=", bi_eq),
+    (6, "<", bi_lt),
+    (7, ">", bi_gt),
+    (8, "dup", bi_dup),
+    (9, "+", bi_add),
     // TODO: This requires the ability to modify the input stream!
     //
     // This is supposed to return the address of the NEXT word in the
     // input stream
     //
-    // ("'", Word::Builtin(bi_tick))
+    // ("'", bi_tick)
 
     // ( @ is the "load operator )  ok
     // ( ! is the "store operator" )  ok
@@ -244,6 +244,6 @@ pub static BUILT_IN_WORDS: &[(&str, Word)] = &[
     // ).unwrap().unwrap()
 
     // Debug
-    ("serdump", Word::Builtin(bi_serdump)),
-    ("coredump", Word::Builtin(bi_coredump)),
+    (10, "serdump", bi_serdump),
+    (11, "coredump", bi_coredump),
 ];
