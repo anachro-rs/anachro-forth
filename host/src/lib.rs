@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{collections::BTreeMap, ops::Deref};
-use serde::{Serialize, Deserialize};
+use serde::Serialize;
 
 pub mod builtins;
 
@@ -188,7 +188,7 @@ impl Context {
 
         let mut bi_set = BTreeSet::new();
 
-        for (key, var) in dict.data.iter() {
+        for (_key, var) in dict.data.iter() {
             if let SerWord::CompiledDefn(cwrd) = var {
                 for w in cwrd {
                     if let SerWord::Builtin { name } = w {
@@ -271,7 +271,7 @@ impl Context {
                 func(self)?;
                 None
             }
-            Word::Compiled { name, data: words } => {
+            Word::Compiled { data: words, .. } => {
                 let ret = words.get(cur.idx).map(Clone::clone);
                 cur.idx += 1;
                 ret

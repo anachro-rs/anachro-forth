@@ -179,7 +179,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
         }
     }
 
-    for (name, word) in ctxt.dict.data.iter() {
+    for (_name, word) in ctxt.dict.data.iter() {
         let word: &Word = word.deref();
         if let Word::Compiled { name, data: words } = word {
             writeln!(
