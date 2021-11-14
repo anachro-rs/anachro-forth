@@ -39,6 +39,9 @@ pub enum Error {
 
     /// We found a "do" without an appropriate pair
     MissingDoPair,
+
+    /// Something has gone *terribly* wrong
+    InternalError,
 }
 
 impl From<core::fmt::Error> for Error {
@@ -387,7 +390,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                     // for the unconditional jump that appears where else appears
                     "else" => offset,
 
-                    _ => panic!(),
+                    _ => return Err(Error::InternalError),
                 } as i32;
 
                 Arc::new(Word::CondRelativeJump {
@@ -458,7 +461,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 } else if let Some(num) = parse_num(other).map(Word::LiteralVal) {
                     Arc::new(num)
                 } else {
-                    panic!() // return Err(())
+                    return Err(Error::InternalError);
                 }
             }
         };
@@ -469,10 +472,10 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
     // TODO: This probably isn't SUPER robust, but for now is a decent sanity check
     // that we have properly paired if/then/elses
     if if_ct != then_ct {
-        panic!() // return Err(());
+        return Err(Error::InternalError);
     }
     if else_ct > if_ct {
-        panic!() // return Err(());
+        return Err(Error::InternalError);
     }
 
     Ok(output)
