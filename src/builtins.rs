@@ -28,7 +28,7 @@ fn bi_coredump(ctxt: &mut Context) -> Result<(), Error> {
         let word: &Word = word.deref();
         match word {
             Word::Builtin { .. } => writeln!(&mut ctxt.cur_output, "(builtin)"),
-            Word::Compiled(ucw) => writeln!(&mut ctxt.cur_output, "(compiled, len: {})", ucw.len()),
+            Word::Compiled { name, data } => writeln!(&mut ctxt.cur_output, "(compiled: {}, len: {})", name, data.len()),
             Word::LiteralVal(lit) => writeln!(&mut ctxt.cur_output, "Literal: {}", lit),
             Word::CondRelativeJump { .. } => {
                 writeln!(&mut ctxt.cur_output, "COND RELATIVE JUMP! TODO!")
@@ -181,7 +181,7 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
 
     for (name, word) in ctxt.dict.data.iter() {
         let word: &Word = word.deref();
-        if let Word::Compiled(words) = word {
+        if let Word::Compiled { name, data: words } = word {
             writeln!(
                 &mut ctxt.cur_output,
                 "CMP\t{}\t{:016X}\t{:016X?}",
@@ -202,17 +202,17 @@ fn bi_serdump(ctxt: &mut Context) -> Result<(), Error> {
     Ok(())
 }
 
-pub static BUILT_IN_WORDS: &[(usize, &str, fn(&mut Context) -> Result<(), Error>)] = &[
-    (0, "emit", bi_emit),
-    (1, ".", bi_pop),
-    (2, "cr", bi_cr),
-    (3, ">r", bi_retstk_push),
-    (4, "r>", bi_retstk_pop),
-    (5, "=", bi_eq),
-    (6, "<", bi_lt),
-    (7, ">", bi_gt),
-    (8, "dup", bi_dup),
-    (9, "+", bi_add),
+pub static BUILT_IN_WORDS: &[(&'static str, fn(&mut Context) -> Result<(), Error>)] = &[
+    ("emit", bi_emit),
+    (".", bi_pop),
+    ("cr", bi_cr),
+    (">r", bi_retstk_push),
+    ("r>", bi_retstk_pop),
+    ("=", bi_eq),
+    ("<", bi_lt),
+    (">", bi_gt),
+    ("dup", bi_dup),
+    ("+", bi_add),
     // TODO: This requires the ability to modify the input stream!
     //
     // This is supposed to return the address of the NEXT word in the
@@ -244,6 +244,6 @@ pub static BUILT_IN_WORDS: &[(usize, &str, fn(&mut Context) -> Result<(), Error>
     // ).unwrap().unwrap()
 
     // Debug
-    (10, "serdump", bi_serdump),
-    (11, "coredump", bi_coredump),
+    ("serdump", bi_serdump),
+    ("coredump", bi_coredump),
 ];

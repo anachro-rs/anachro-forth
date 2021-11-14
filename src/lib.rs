@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{collections::BTreeMap, ops::Deref};
+use serde::{Serialize, Deserialize};
 
 pub mod builtins;
 
@@ -49,45 +51,47 @@ impl From<core::fmt::Error> for Error {
 pub enum Word {
     LiteralVal(i32),
     Builtin {
-        name: String,
+        name: &'static str,
         func: fn(&mut Context) -> Result<(), Error>,
     },
-    Compiled(Vec<Arc<Word>>),
+    Compiled {
+        name: String,
+        data: Vec<Arc<Word>>,
+    },
+    UncondRelativeJump { offset: i32 },
+    CondRelativeJump { offset: i32, jump_on: bool },
+}
+
+#[derive(Debug, Serialize)]
+pub enum SerWord {
+    LiteralVal(i32),
+    Builtin {
+        name: &'static str,
+    },
+    CompiledDefn(Vec<SerWord>),
+    CompiledRef(String),
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
 impl Word {
-    fn serialize(&self) {
+    fn serialize(&self, toplevel: bool) -> SerWord {
         match self {
-            Word::LiteralVal(lit) => println!("LIT({})", lit),
-            Word::Builtin{ func: bi, .. } => {
-                let mut found = false;
-                for (idx, name, wrd) in builtins::BUILT_IN_WORDS {
-                    // if let Word::Builtin { func: biw, .. } = wrd {
-                    //     // lol
-                    //     let biwer = biw as *const _ as usize;
-                    //     let bier = bi as *const _ as usize;
-                    //     println!("{} => {:016X}, {:016X}", name, biwer, bier);
-                    //     if biwer == bier {
-                    //         found = true;
-                    //         println!("BI({}, {})", idx, name);
-                    //         break;
-                    //     }
-                    // }
-                }
-                // assert!(found);
-                if !found {
-                    println!("???");
+            Word::LiteralVal(lit) => SerWord::LiteralVal(*lit),
+            Word::Builtin{ name, .. } => SerWord::Builtin { name },
+            Word::Compiled { name, data: comp } => {
+                if toplevel {
+                    let mut out = Vec::new();
+                    for c in comp.iter() {
+                        out.push(c.serialize(false));
+                    }
+                    SerWord::CompiledDefn(out)
+                } else {
+                    SerWord::CompiledRef(name.clone())
                 }
             },
-            Word::Compiled(comp) => {
-                for c in comp.iter() {
-                    c.serialize();
-                }
-            },
-            Word::UncondRelativeJump { offset } => println!("UCRJ({})", offset),
-            Word::CondRelativeJump { offset, jump_on } => println!("CRJ({}, on: {})", offset, jump_on),
+            Word::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+            Word::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
         }
     }
 }
@@ -101,6 +105,11 @@ pub struct Dict {
     pub(crate) data: BTreeMap<String, Arc<Word>>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct SerDict {
+    data: BTreeMap<String, SerWord>,
+}
+
 impl Dict {
     pub fn new() -> Self {
         Self {
@@ -108,13 +117,17 @@ impl Dict {
         }
     }
 
-    pub fn serialize(&self) {
+    pub fn serialize(&self) -> SerDict {
         let new = self.clone();
+        let mut out = SerDict {
+            data: BTreeMap::new()
+        };
 
         for (word, val) in new.data.iter() {
-            print!("{} => ", word);
-            val.serialize();
+            out.data.insert(word.clone(), val.serialize(true));
         }
+
+        out
     }
 }
 
@@ -167,8 +180,33 @@ pub enum StepResult {
 }
 
 impl Context {
-    pub fn serialize(&self) {
-        self.dict.serialize()
+    pub fn serialize(&self) -> SerDict {
+        let mut dict = self.dict.serialize();
+
+        let mut bi_set = BTreeSet::new();
+
+        for (key, var) in dict.data.iter() {
+            if let SerWord::CompiledDefn(cwrd) = var {
+                for w in cwrd {
+                    if let SerWord::Builtin { name } = w {
+                        bi_set.insert(*name);
+                    }
+                }
+            }
+        }
+
+        dict.data.retain(|_k, v| {
+            match v {
+                SerWord::LiteralVal(_) => true,
+                SerWord::Builtin { .. } => false,
+                SerWord::CompiledDefn(_) => true,
+                SerWord::CompiledRef(_) => todo!(),
+                SerWord::UncondRelativeJump { .. } => true,
+                SerWord::CondRelativeJump { .. } => true,
+            }
+        });
+
+        dict
     }
 
     pub fn data_stack(&self) -> &Stack {
@@ -183,7 +221,7 @@ impl Context {
         &self.flow_stk
     }
 
-    pub fn with_builtins(bi: &[(usize, &str, fn(&mut Context) -> Result<(), Error>)]) -> Self {
+    pub fn with_builtins(bi: &[(&'static str, fn(&mut Context) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
             data_stk: Stack::new(Error::DataStackEmpty),
             ret_stk: Stack::new(Error::RetStackEmpty),
@@ -192,8 +230,8 @@ impl Context {
             cur_output: String::new(),
         };
 
-        for (_idx, word, func) in bi {
-            new.dict.data.insert(word.to_string(), Arc::new(Word::Builtin(func)));
+        for (word, func) in bi {
+            new.dict.data.insert(word.to_string(), Arc::new(Word::Builtin { name: word, func: *func }));
         }
 
         new
@@ -230,7 +268,7 @@ impl Context {
                 func(self)?;
                 None
             }
-            Word::Compiled(words) => {
+            Word::Compiled { name, data: words } => {
                 let ret = words.get(cur.idx).map(Clone::clone);
                 cur.idx += 1;
                 ret
@@ -380,13 +418,13 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 continue;
             }
             "do" => {
-                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_retstk_push }));
-                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_retstk_push }));
+                output.push(Arc::new(Word::Builtin { name: ">r", func: builtins::bi_retstk_push }));
+                output.push(Arc::new(Word::Builtin { name: ">r", func: builtins::bi_retstk_push }));
                 do_ct += 1;
                 continue;
             }
             "loop" => {
-                output.push(Arc::new(Word::Builtin { name: String::new(), func: builtins::bi_priv_loop }));
+                output.push(Arc::new(Word::Builtin { name: "PRIV_LOOP", func: builtins::bi_priv_loop }));
 
                 let mut count: usize = do_ct - loop_ct;
                 let offset = lowered[..idx]
@@ -453,12 +491,15 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
 
             let compiled = compile(ctxt, relevant)?;
 
-            ctxt.dict.data.insert(name, Arc::new(Word::Compiled(compiled)));
+            ctxt.dict.data.insert(name.clone(), Arc::new(Word::Compiled {
+                name,
+                data: compiled,
+            }));
         }
         _ => {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
-            let temp_compiled = Arc::new(Word::Compiled(compile(ctxt, &data)?));
+            let temp_compiled = Arc::new(Word::Compiled { name: "_".into(), data: compile(ctxt, &data)? });
             ctxt.push_exec(temp_compiled);
         }
     }
