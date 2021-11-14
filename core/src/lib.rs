@@ -46,53 +46,48 @@ impl From<core::fmt::Error> for Error {
 }
 
 #[derive(Clone)]
-pub enum RefWord<'stor, Sdata, Sexec, D>
+pub enum RefWord<'stor, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32> + 'stor,
-    Sexec: Stack<Item = RefExecCtx<'stor, Sdata, Sexec, D>> + 'stor,
-    D: RoDict<'stor, Sdata, Sexec>,
+    Sexec: ExecStack<'stor, Sdata> + 'stor,
 {
     LiteralVal(i32),
     Builtin {
         name: &'stor str,
-        func: fn(&mut Runtime<Sdata, Sexec, D>) -> Result<(), Error>,
+        func: fn(&mut Runtime<Sdata, Sexec>) -> Result<(), Error>,
     },
     Compiled {
         name: &'stor str,
-        data: &'stor [RefWord<'stor, Sdata, Sexec, D>],
+        data: &'stor [RefWord<'stor, Sdata, Sexec>],
     },
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-pub struct RefExecCtx<'stor, Sdata, Sexec, D>
+pub struct RefExecCtx<'stor, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: Stack<Item = RefExecCtx<'stor, Sdata, Sexec, D>>,
-    D: RoDict<'stor, Sdata, Sexec>
+    Sexec: ExecStack<'stor, Sdata>,
 {
-    idx: usize,
-    word: RefWord<'stor, Sdata, Sexec, D>,
+    pub idx: usize,
+    pub word: RefWord<'stor, Sdata, Sexec>,
 }
 
-pub struct Runtime<'stor, Sdata, Sexec, D>
+pub struct Runtime<'stor, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32> + 'stor,
-    Sexec: Stack<Item = RefExecCtx<'stor, Sdata, Sexec, D>> + 'stor,
-    D: RoDict<'stor, Sdata, Sexec> + 'stor,
+    Sexec: ExecStack<'stor, Sdata> + 'stor,
 {
-    data_stk: Sdata,
-    ret_stk: Sdata,
-    flow_stk: Sexec,
-    dict: D,
+    pub data_stk: &'stor mut Sdata,
+    pub ret_stk: &'stor mut Sdata,
+    pub flow_stk: &'stor mut Sexec,
     // cur_output: String,
 }
 
-impl<'stor, Sdata, Sexec, D> Runtime<'stor, Sdata, Sexec, D>
+impl<'stor, Sdata, Sexec> Runtime<'stor, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32> + Clone,
-    Sexec: Stack<Item = RefExecCtx<'stor, Sdata, Sexec, D>> + Clone,
-    D: RoDict<'stor, Sdata, Sexec> + Clone,
+    Sexec: ExecStack<'stor, Sdata> + Clone,
 {
     pub fn step(&mut self) -> Result<StepResult, Error> {
         match self.step_inner() {
@@ -184,7 +179,7 @@ where
         Ok(StepResult::Working)
     }
 
-    pub fn push_exec(&mut self, word: RefWord<'stor, Sdata, Sexec, D>) {
+    pub fn push_exec(&mut self, word: RefWord<'stor, Sdata, Sexec>) {
         self.flow_stk.push(RefExecCtx { idx: 0, word });
     }
 }
@@ -202,12 +197,26 @@ pub trait Stack {
     fn get_mut(&mut self, index: usize) -> Result<&mut Self::Item, Error>;
 }
 
+pub trait ExecStack<'stor, Sdata>: Sized
+where
+    Sdata: Stack<Item = i32>,
+{
+    fn push(&mut self, data: RefExecCtx<'stor, Sdata, Self>);
+    fn pop(&mut self) -> Result<RefExecCtx<'stor, Sdata, Self>, Error>;
+    fn last(&self) -> Result<&RefExecCtx<'stor, Sdata, Self>, Error>;
+    fn len(&self) -> usize;
+    fn last_mut(&mut self) -> Result<&mut RefExecCtx<'stor, Sdata, Self>, Error>;
+
+    // TODO: This is suspicious...
+    fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx<'stor, Sdata, Self>, Error>;
+}
+
 pub trait RoDict<'stor, Sdata, Sexec>: Sized + 'stor
 where
     Sdata: Stack<Item = i32> + 'stor,
-    Sexec: Stack<Item = RefExecCtx<'stor, Sdata, Sexec, Self>> + 'stor,
+    Sexec: ExecStack<'stor, Sdata> + 'stor,
 {
-    fn get<'a>(&self, name: &'a str) -> Option<&'stor RefWord<'stor, Sdata, Sexec, Self>>;
+    fn get<'a>(&self, name: &'a str) -> Option<&'stor RefWord<'stor, Sdata, Sexec>>;
 }
 
 pub enum StepResult {

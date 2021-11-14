@@ -5,16 +5,16 @@ use serde::Serialize;
 
 use anachro_forth_core as afc;
 
-use afc::{Error, Stack};
+use afc::{Error, Stack, StepResult, ExecStack, RefExecCtx, RefWord, Runtime};
 
 pub mod builtins;
 
 #[derive(Clone)]
-pub enum Word {
+pub enum Word<Sdata, Sexec> {
     LiteralVal(i32),
     Builtin {
         name: &'static str,
-        func: fn(&mut Context) -> Result<(), Error>,
+        func: fn(&mut Runtime<Sdata, Sexec>) -> Result<(), Error>,
     },
     Compiled {
         name: String,
@@ -36,7 +36,7 @@ pub enum SerWord {
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-impl Word {
+impl<Sdata, Sexec> Word<Sdata, Sexec> {
     fn serialize(&self, toplevel: bool) -> SerWord {
         match self {
             Word::LiteralVal(lit) => SerWord::LiteralVal(*lit),
@@ -58,13 +58,13 @@ impl Word {
     }
 }
 
-pub struct ExecCtx {
+pub struct ExecCtx<Sdata, Sexec> {
     idx: usize,
-    word: Arc<Word>,
+    word: Arc<Word<Sdata, Sexec>>,
 }
 
 pub struct Dict {
-    pub(crate) data: BTreeMap<String, Arc<Word>>,
+    pub(crate) data: BTreeMap<String, Arc<Word<Sdata, Sexec>>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,18 +136,67 @@ impl<T> Stack for StdVecStack<T> {
     }
 }
 
+struct FlowBoi<'a> {
+    flow_stk: &'a mut StdVecStack<ExecCtx<StdVecStack<i32>, FlowBoi<'a>>>,
+    dict: &'a mut Dict,
+}
+
+impl<'a> From<RefExecCtx<'a, StdVecStack<i32>, FlowBoi<'a>>> for ExecCtx<StdVecStack<i32>, FlowBoi<'a>> {
+    fn from(other: RefExecCtx<'a, StdVecStack<i32>, FlowBoi<'a>>) -> ExecCtx {
+        ExecCtx {
+            idx: other.idx,
+            word: Arc::new(match other.word {
+                RefWord::LiteralVal(val) => Word::LiteralVal(val),
+                RefWord::Builtin { name, func } => Word::Builtin {
+                    func, name
+                },
+                RefWord::Compiled { name, data } => todo!(),
+                RefWord::UncondRelativeJump { offset } => Word::UncondRelativeJump { offset },
+                RefWord::CondRelativeJump { offset, jump_on } => Word::CondRelativeJump { offset, jump_on },
+            })
+        }
+    }
+}
+
+impl<'a> ExecStack<'a, StdVecStack<i32>> for FlowBoi<'a> {
+    fn push(&mut self, data: RefExecCtx<'a, StdVecStack<i32>, Self>) {
+        self.flow_stk.data.push(data.into());
+    }
+
+    fn pop(&mut self) -> Result<RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+        // self.data.pop().ok_or(Error::DataStackUnderflow).map(|d| {
+        //     todo!()
+        // })
+        todo!()
+    }
+
+    fn last(&self) -> Result<&RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+        // self.data.last().ok_or(self.err.clone()).map(|d| todo!())
+        todo!()
+    }
+
+    fn last_mut(&mut self) -> Result<&mut RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+        // self.data.last_mut().ok_or(self.err.clone()).map(|d| todo!())
+        todo!()
+    }
+
+    fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+        // self.data.get_mut(index).ok_or(self.err.clone()).map(|d| todo!())
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        // self.data.len()
+        todo!()
+    }
+}
+
 pub struct Context {
     data_stk: StdVecStack<i32>,
     ret_stk: StdVecStack<i32>,
     flow_stk: StdVecStack<ExecCtx>,
     dict: Dict,
     cur_output: String,
-    runtime: afc::Runtime,
-}
-
-pub enum StepResult {
-    Done,
-    Working,
 }
 
 impl Context {
@@ -180,6 +229,19 @@ impl Context {
         dict
     }
 
+    pub fn step(&mut self) -> Result<StepResult, Error> {
+        let mut lol = afc::Runtime {
+            data_stk: &mut self.data_stk,
+            flow_stk: &mut FlowBoi {
+                flow_stk: &mut self.flow_stk,
+                dict: &mut self.dict,
+            },
+            ret_stk: &mut self.ret_stk,
+        };
+
+        todo!()
+    }
+
     pub fn data_stack(&self) -> &StdVecStack<i32> {
         &self.data_stk
     }
@@ -199,7 +261,6 @@ impl Context {
             flow_stk: StdVecStack::new(Error::FlowStackEmpty),
             dict: Dict::new(),
             cur_output: String::new(),
-            runtime: afc::Runtime { },
         };
 
         for (word, func) in bi {
@@ -209,14 +270,14 @@ impl Context {
         new
     }
 
-    pub fn push_exec(&mut self, word: Arc<Word>) {
-        self.flow_stk.push(ExecCtx { idx: 0, word });
-    }
-
     pub fn output(&mut self) -> String {
         let mut new_out = String::new();
         core::mem::swap(&mut self.cur_output, &mut new_out);
         new_out
+    }
+
+    pub fn push_exec(&mut self, word: Arc<Word>) {
+        Stack::push(&mut self.flow_stk, ExecCtx { idx: 0, word });
     }
 }
 
