@@ -1,10 +1,11 @@
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
-use forth_hax::builtins::BUILT_IN_WORDS;
-use forth_hax::*;
+use anachro_forth_host::builtins::BUILT_IN_WORDS;
+use anachro_forth_host::*;
+use anachro_forth_core::*;
 
-fn main() -> Result<(), forth_hax::Error> {
+fn main() -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(BUILT_IN_WORDS);
 
     loop {

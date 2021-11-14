@@ -1,4 +1,4 @@
-use forth_hax::{builtins::BUILT_IN_WORDS, evaluate, Context, StepResult};
+use anachro_forth_host::{builtins::BUILT_IN_WORDS, evaluate, Context, StepResult};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output

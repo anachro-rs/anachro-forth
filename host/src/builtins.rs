@@ -1,6 +1,7 @@
 use crate::{Context, Error, Word};
 use std::fmt::Write;
 use std::ops::Deref;
+use anachro_forth_core::Stack;
 
 fn bi_emit(ctxt: &mut Context) -> Result<(), Error> {
     let word = ctxt.data_stk.pop()? as u32;

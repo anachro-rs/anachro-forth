@@ -3,52 +3,11 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, ops::Deref};
 use serde::Serialize;
 
+use anachro_forth_core as afc;
+
+use afc::{Error, Stack};
+
 pub mod builtins;
-
-#[derive(Debug, Clone)]
-pub enum Error {
-    /// Failed to write to the "stdout" style output
-    OutputFormat,
-
-    /// Failed to read from the "stdin" style input
-    Input,
-
-    /// Data stack underflowed
-    DataStackUnderflow,
-
-    /// Data stack was empty
-    DataStackEmpty,
-
-    /// Return stack was empty
-    RetStackEmpty,
-
-    /// Flow/Execution stack was empty
-    FlowStackEmpty,
-
-    /// Some kind of checked math failed
-    BadMath,
-
-    /// We found an "if" without an appropriate pair
-    MissingIfPair,
-
-    /// We found an "else" without an appropriate pair
-    MissingElsePair,
-
-    /// We found a "loop" without an appropriate pair
-    MissingLoopPair,
-
-    /// We found a "do" without an appropriate pair
-    MissingDoPair,
-
-    /// Something has gone *terribly* wrong
-    InternalError,
-}
-
-impl From<core::fmt::Error> for Error {
-    fn from(_other: core::fmt::Error) -> Self {
-        Self::OutputFormat
-    }
-}
 
 #[derive(Clone)]
 pub enum Word {
@@ -135,46 +94,55 @@ impl Dict {
 }
 
 #[derive(Debug)]
-pub struct Stack {
-    data: Vec<i32>,
+pub struct StdVecStack<T> {
+    data: Vec<T>,
     err: Error,
 }
 
-impl Stack {
+impl<T> StdVecStack<T> {
     pub fn new(err: Error) -> Self {
-        Stack {
+        StdVecStack {
             data: Vec::new(),
             err,
         }
     }
+}
 
-    pub fn push(&mut self, data: i32) {
+impl<T> Stack for StdVecStack<T> {
+    type Item = T;
+
+    fn push(&mut self, data: T) {
         self.data.push(data);
     }
 
-    pub fn pop(&mut self) -> Result<i32, Error> {
+    fn pop(&mut self) -> Result<T, Error> {
         self.data.pop().ok_or(Error::DataStackUnderflow)
     }
 
-    pub fn last(&self) -> Result<&i32, Error> {
+    fn last(&self) -> Result<&T, Error> {
         self.data.last().ok_or(self.err.clone())
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Result<&mut i32, Error> {
+    fn last_mut(&mut self) -> Result<&mut T, Error> {
+        self.data.last_mut().ok_or(self.err.clone())
+    }
+
+    fn get_mut(&mut self, index: usize) -> Result<&mut T, Error> {
         self.data.get_mut(index).ok_or(self.err.clone())
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.data.len()
     }
 }
 
 pub struct Context {
-    data_stk: Stack,
-    ret_stk: Stack,
-    flow_stk: Vec<ExecCtx>,
+    data_stk: StdVecStack<i32>,
+    ret_stk: StdVecStack<i32>,
+    flow_stk: StdVecStack<ExecCtx>,
     dict: Dict,
     cur_output: String,
+    runtime: afc::Runtime,
 }
 
 pub enum StepResult {
@@ -212,25 +180,26 @@ impl Context {
         dict
     }
 
-    pub fn data_stack(&self) -> &Stack {
+    pub fn data_stack(&self) -> &StdVecStack<i32> {
         &self.data_stk
     }
 
-    pub fn return_stack(&self) -> &Stack {
+    pub fn return_stack(&self) -> &StdVecStack<i32> {
         &self.ret_stk
     }
 
-    pub fn flow_stack(&self) -> &[ExecCtx] {
+    pub fn flow_stack(&self) -> &StdVecStack<ExecCtx> {
         &self.flow_stk
     }
 
     pub fn with_builtins(bi: &[(&'static str, fn(&mut Context) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
-            data_stk: Stack::new(Error::DataStackEmpty),
-            ret_stk: Stack::new(Error::RetStackEmpty),
-            flow_stk: Vec::new(),
+            data_stk: StdVecStack::new(Error::DataStackEmpty),
+            ret_stk: StdVecStack::new(Error::RetStackEmpty),
+            flow_stk: StdVecStack::new(Error::FlowStackEmpty),
             dict: Dict::new(),
             cur_output: String::new(),
+            runtime: afc::Runtime { },
         };
 
         for (word, func) in bi {
@@ -238,98 +207,6 @@ impl Context {
         }
 
         new
-    }
-
-    pub fn step(&mut self) -> Result<StepResult, Error> {
-        match self.step_inner() {
-            Ok(r) => Ok(r),
-            Err(e) => {
-                self.flow_stk.clear();
-                while let Ok(_) = self.data_stk.pop() {}
-                while let Ok(_) = self.ret_stk.pop() {}
-                Err(e)
-            }
-        }
-    }
-
-    fn step_inner(&mut self) -> Result<StepResult, Error> {
-        let cur = match self.flow_stk.last_mut() {
-            Some(frame) => frame,
-            None => return Ok(StepResult::Done),
-        };
-
-        let mut jump = None;
-
-        let word: &Word = cur.word.deref();
-
-        let to_push = match word {
-            Word::LiteralVal(lit) => {
-                self.data_stk.push(*lit);
-                None
-            }
-            Word::Builtin { func, .. } => {
-                func(self)?;
-                None
-            }
-            Word::Compiled { data: words, .. } => {
-                let ret = words.get(cur.idx).map(Clone::clone);
-                cur.idx += 1;
-                ret
-            }
-            Word::UncondRelativeJump { offset } => {
-                jump = Some(*offset);
-                None
-            }
-            Word::CondRelativeJump { offset, jump_on } => {
-                let topvar = self.data_stk.pop()?;
-
-                // Truth table:
-                // tv == 0 | jump_on | jump
-                // ========|=========|=======
-                // false   | false   | no
-                // true    | false   | yes
-                // false   | true    | yes
-                // true    | true    | no
-                let do_jump = (topvar == 0) ^ jump_on;
-
-                println!("topvar: {}, jump_on: {}", topvar, jump_on);
-
-                if do_jump {
-                    println!("Jumping!");
-                    jump = Some(*offset);
-                } else {
-                    println!("Not Jumping!");
-                }
-                None
-            }
-        };
-
-        if let Some(push) = to_push {
-            self.push_exec(push);
-        } else {
-            self.flow_stk.pop();
-        }
-
-        if let Some(jump) = jump {
-            // We just popped off the jump command, so now we are back in
-            // the "parent" frame.
-
-            let new_cur = self.flow_stk.last_mut().ok_or(Error::FlowStackEmpty)?;
-
-            if jump < 0 {
-                let abs = jump.abs() as usize;
-
-                assert!(abs <= new_cur.idx);
-
-                new_cur.idx -= abs;
-            } else {
-                let abs = jump as usize;
-                assert_ne!(abs, 0);
-                new_cur.idx = new_cur.idx.checked_add(abs).ok_or(Error::BadMath)?;
-            }
-        }
-
-        Ok(StepResult::Working)
     }
 
     pub fn push_exec(&mut self, word: Arc<Word>) {

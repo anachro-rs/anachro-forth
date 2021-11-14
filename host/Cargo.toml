@@ -1,5 +1,5 @@
 [package]
-name = "forth-hax"
+name = "anachro-forth-host"
 version = "0.1.0"
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -10,6 +10,9 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 tui = "0.16.0"
 termion = "1.5.6"
+
+[dependencies.anachro-forth-core]
+path = "../core"
 
 [dependencies.postcard]
 version = "0.7.2"

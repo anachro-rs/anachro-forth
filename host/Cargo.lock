@@ -12,6 +12,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "anachro-forth-core"
+version = "0.1.0"
+
+[[package]]
+name = "anachro-forth-host"
+version = "0.1.0"
+dependencies = [
+ "anachro-forth-core",
+ "postcard",
+ "serde",
+ "termion",
+ "tui",
+]
+
+[[package]]
 name = "atomic-polyfill"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -104,16 +119,6 @@ checksum = "e36cfb62ff156596c892272f3015ef952fe1525e85261fa3a7f327bd6b384ab9"
 dependencies = [
  "nb 0.1.3",
  "void",
-]
-
-[[package]]
-name = "forth-hax"
-version = "0.1.0"
-dependencies = [
- "postcard",
- "serde",
- "termion",
- "tui",
 ]
 
 [[package]]
