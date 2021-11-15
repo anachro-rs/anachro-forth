@@ -75,8 +75,13 @@ impl From<core::fmt::Error> for Error {
 // #[derive(Debug, Clone)]
 // pub struct FuncSeq;
 
-pub trait FuncSeq<T> {
-    fn get(&self, _idx: usize) -> Option<T>;
+pub trait FuncSeq<T, F>
+where
+    F: FuncSeq<T, F>,
+    T: Clone,
+    F: Clone,
+{
+    fn get(&self, _idx: usize) -> Option<RefWord2<T, F>>;
 }
 
 
@@ -84,7 +89,7 @@ pub trait FuncSeq<T> {
 #[derive(Debug, Clone)]
 pub enum RefWord2<T, F>
 where
-    F: FuncSeq<T> + Clone,
+    F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     LiteralVal(i32),
@@ -108,7 +113,7 @@ where
 
 pub struct RefExecCtx2<T, F>
 where
-    F: FuncSeq<T> + Clone,
+    F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     pub idx: usize,
@@ -129,7 +134,7 @@ pub struct Runtime<T, F, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecStack2<T, F>,
-    F: FuncSeq<T> + Clone,
+    F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     pub data_stk: Sdata,
@@ -143,7 +148,7 @@ impl<Sdata, Sexec, T, F> Runtime<T, F, Sdata, Sexec>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecStack2<T, F>,
-    F: FuncSeq<T> + Clone,
+    F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     pub fn step(&mut self) -> Result<StepResult<T>, Error> {
@@ -173,17 +178,22 @@ where
 
             let mut jump = None;
 
+            enum WhichToken<T, U> {
+                Single(T),
+                Seq(U),
+            }
+
             let to_push = match cur.word.clone() {
                 RefWord2::LiteralVal(lit) => {
                     self.data_stk.push(lit);
                     None
                 }
-                RefWord2::Verb(ft) => Some(ft),
+                RefWord2::Verb(ft) => Some(WhichToken::Single(ft)),
                 RefWord2::VerbSeq(seq) => {
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),
                     // and overshooting (probably an engine error)
-                    let ret = seq.get(cur.idx);
+                    let ret = seq.get(cur.idx).map(WhichToken::Seq);
                     cur.idx += 1;
                     ret
                 }
@@ -224,10 +234,14 @@ where
                 }
             };
 
-            if let Some(ft) = to_push {
-                break 'oloop ft;
-            } else {
-                let _ = self.flow_stk.pop();
+            match to_push {
+                Some(WhichToken::Single(ft)) => break 'oloop ft,
+                Some(WhichToken::Seq(seq)) => {
+                    self.flow_stk.push(RefExecCtx2 { idx: 0, word: seq });
+                }
+                None => {
+                    self.flow_stk.pop()?;
+                },
             }
 
             if let Some(jump) = jump {
@@ -274,7 +288,7 @@ pub trait Stack {
 
 pub trait ExecStack2<T, F>
 where
-    F: FuncSeq<T> + Clone,
+    F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     fn push(&mut self, data: RefExecCtx2<T, F>);
@@ -369,7 +383,7 @@ mod test {
 
     impl<T, F> ExecStack2<T, F> for StdVecStack<RefExecCtx2<T, F>>
     where
-        F: FuncSeq<T> + Clone,
+        F: FuncSeq<T, F> + Clone,
         T: Clone,
     {
         fn push(&mut self, data: RefExecCtx2<T, F>) {
@@ -413,13 +427,38 @@ mod test {
     // }
 
     #[derive(Clone)]
-    struct SeqTok;
+    struct SeqTok {
+        inner: Vec<RefWord2<Toker, SeqTok>>,
+    }
 
-    impl FuncSeq<()> for SeqTok {
-        fn get(&self, _idx: usize) -> Option<()> {
-            todo!()
+    impl FuncSeq<Toker, SeqTok> for SeqTok {
+        fn get(&self, idx: usize) -> Option<RefWord2<Toker, SeqTok>> {
+            self.inner.get(idx).map(Clone::clone)
         }
     }
+
+    #[derive(Clone)]
+    struct Toker {
+        bi: Builtin,
+    }
+
+    type Builtin = fn(
+        &mut Runtime<
+            Toker,
+            SeqTok,
+            StdVecStack<i32>,
+            StdVecStack<
+                RefExecCtx2<Toker, SeqTok>
+            >
+        >
+    ) -> Result<(), Error>;
+
+// pub fn bi_emit<T, F, Sdata, Sexec>(ctxt: &mut Runtime<T, F, Sdata, Sexec>) -> Result<(), Error>
+// where
+//    Sdata: Stack<Item = i32>,
+//    Sexec: ExecStack2<T, F>,
+//    F: FuncSeq<T, F> + Clone,
+//    T: Clone,
 
     #[test]
     fn foo() {
@@ -436,14 +475,21 @@ mod test {
             _pd_ty_t_f: PhantomData,
         };
 
-        x.push_exec(RefWord2::VerbSeq(SeqTok));
+        x.push_exec(RefWord2::VerbSeq(SeqTok {
+            inner: vec![
+                RefWord2::LiteralVal(42),
+                RefWord2::Verb(Toker { bi: builtins::bi_emit }),
+            ]
+        }));
 
         match x.step() {
             Ok(StepResult::Done) => todo!(),
             Ok(StepResult::Working(ft)) => {
-                // yey
+                (ft.bi)(&mut x).unwrap();
             }
             Err(e) => todo!(),
         }
+
+        panic!()
     }
 }

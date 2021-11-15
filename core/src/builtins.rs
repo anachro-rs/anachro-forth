@@ -4,7 +4,7 @@ pub fn bi_emit<T, F, Sdata, Sexec>(ctxt: &mut Runtime<T, F, Sdata, Sexec>) -> Re
 where
    Sdata: Stack<Item = i32>,
    Sexec: ExecStack2<T, F>,
-   F: FuncSeq<T> + Clone,
+   F: FuncSeq<T, F> + Clone,
    T: Clone,
  {
     let word = ctxt.data_stk.pop()? as u32;
