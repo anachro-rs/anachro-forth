@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+// #![cfg_attr(not(test), no_std)]
 
 use core::marker::PhantomData;
 
@@ -171,6 +171,9 @@ where
         // It'll go *something* like looping, but only return in cases where we have a FuncTok
 
         let ret = 'oloop: loop {
+            // TODO: I should set a limit to the max number of loop
+            // iterations that are made here! Or maybe go back to
+            // yielding at each step
             let cur = match self.flow_stk.last_mut() {
                 Ok(frame) => frame,
                 Err(_) => return Ok(StepResult::Done),
@@ -178,22 +181,32 @@ where
 
             let mut jump = None;
 
-            enum WhichToken<T, U> {
+            enum WhichToken<T, F>
+            where
+                F: FuncSeq<T, F> + Clone,
+                T: Clone,
+            {
                 Single(T),
-                Seq(U),
+                Ref(RefWord2<T, F>),
             }
 
             let to_push = match cur.word.clone() {
                 RefWord2::LiteralVal(lit) => {
+                    // println!("lit");
                     self.data_stk.push(lit);
                     None
                 }
-                RefWord2::Verb(ft) => Some(WhichToken::Single(ft)),
+                RefWord2::Verb(ft) => {
+                    // println!("verb");
+                    Some(WhichToken::Single(ft))
+                }
                 RefWord2::VerbSeq(seq) => {
+                    // println!("verbseq->{}", cur.idx);
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),
                     // and overshooting (probably an engine error)
-                    let ret = seq.get(cur.idx).map(WhichToken::Seq);
+                    let ret = seq.get(cur.idx).map(WhichToken::Ref);
+                    // println!("\tgot? {}", ret.is_some());
                     cur.idx += 1;
                     ret
                 }
@@ -207,10 +220,12 @@ where
                 //     ret
                 // }
                 RefWord2::UncondRelativeJump { offset } => {
+                    // println!("ucrj");
                     jump = Some(offset);
                     None
                 }
                 RefWord2::CondRelativeJump { offset, jump_on } => {
+                    // println!("crj");
                     let topvar = self.data_stk.pop()?;
 
                     // Truth table:
@@ -235,11 +250,17 @@ where
             };
 
             match to_push {
-                Some(WhichToken::Single(ft)) => break 'oloop ft,
-                Some(WhichToken::Seq(seq)) => {
-                    self.flow_stk.push(RefExecCtx2 { idx: 0, word: seq });
+                Some(WhichToken::Single(ft)) => {
+                    // println!("BREAK");
+                    self.flow_stk.pop()?;
+                    break 'oloop ft;
+                },
+                Some(WhichToken::Ref(rf)) => {
+                    // println!("FLOWPUSH");
+                    self.flow_stk.push(RefExecCtx2 { idx: 0, word: rf });
                 }
                 None => {
+                    // println!("FLOWPOP");
                     self.flow_stk.pop()?;
                 },
             }
@@ -427,28 +448,28 @@ mod test {
     // }
 
     #[derive(Clone)]
-    struct SeqTok {
-        inner: Vec<RefWord2<Toker, SeqTok>>,
+    struct SeqTok<'a> {
+        inner: &'a [RefWord2<Toker<'a>, SeqTok<'a>>],
     }
 
-    impl FuncSeq<Toker, SeqTok> for SeqTok {
-        fn get(&self, idx: usize) -> Option<RefWord2<Toker, SeqTok>> {
+    impl<'a> FuncSeq<Toker<'a>, SeqTok<'a>> for SeqTok<'a> {
+        fn get(&self, idx: usize) -> Option<RefWord2<Toker<'a>, SeqTok<'a>>> {
             self.inner.get(idx).map(Clone::clone)
         }
     }
 
     #[derive(Clone)]
-    struct Toker {
-        bi: Builtin,
+    struct Toker<'a> {
+        bi: Builtin<'a>,
     }
 
-    type Builtin = fn(
+    type Builtin<'a> = fn(
         &mut Runtime<
-            Toker,
-            SeqTok,
+            Toker<'a>,
+            SeqTok<'a>,
             StdVecStack<i32>,
             StdVecStack<
-                RefExecCtx2<Toker, SeqTok>
+                RefExecCtx2<Toker<'a>, SeqTok<'a>>
             >
         >
     ) -> Result<(), Error>;
@@ -462,12 +483,15 @@ mod test {
 
     #[test]
     fn foo() {
-        println!("yey");
-
+        // These are the only data structures required, and Runtime is generic over the
+        // stacks, so I could easily use heapless::Vec as a backing structure as well
         let mut ds = StdVecStack::new(Error::DataStackEmpty);
-        let mut rs = StdVecStack::new(Error::DataStackEmpty);
-        let mut fs = StdVecStack::new(Error::DataStackEmpty);
+        let mut rs = StdVecStack::new(Error::RetStackEmpty);
+        let mut fs = StdVecStack::new(Error::FlowStackEmpty);
 
+        // This is a generic Runtime type, I'll likely define two versions:
+        // One with std-ability (for the host), and one no-std one, so users
+        // wont have to deal with all the generic shenanigans
         let mut x = Runtime {
             data_stk: ds,
             ret_stk: rs,
@@ -475,21 +499,52 @@ mod test {
             _pd_ty_t_f: PhantomData,
         };
 
+        // Manually craft a word, roughly:
+        // : star 42 emit ;
+        let pre_seq = [
+            RefWord2::LiteralVal(42),
+            RefWord2::Verb(Toker { bi: builtins::bi_emit }),
+        ];
+
+        // Manually craft another word, roughly:
+        // : mstar star -1 if star star then ;
+        let seq = [
+            RefWord2::VerbSeq(SeqTok {
+                inner: &pre_seq,
+            }),
+            RefWord2::LiteralVal(-1),
+            RefWord2::CondRelativeJump { offset: 2, jump_on: false },
+            RefWord2::VerbSeq(SeqTok {
+                inner: &pre_seq,
+            }),
+            RefWord2::VerbSeq(SeqTok {
+                inner: &pre_seq,
+            }),
+        ];
+
+        // In the future, these words will be obtained from deserialized output,
+        // rather than being crafted manually. I'll probably need GhostCell for
+        // the self-referential parts
+
+        // Push `mstar` into the execution context, basically
+        // treating it as an "entry point"
         x.push_exec(RefWord2::VerbSeq(SeqTok {
-            inner: vec![
-                RefWord2::LiteralVal(42),
-                RefWord2::Verb(Toker { bi: builtins::bi_emit }),
-            ]
+            inner: &seq,
         }));
 
-        match x.step() {
-            Ok(StepResult::Done) => todo!(),
-            Ok(StepResult::Working(ft)) => {
-                (ft.bi)(&mut x).unwrap();
+        loop {
+            match x.step() {
+                Ok(StepResult::Done) => break,
+                Ok(StepResult::Working(ft)) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    (ft.bi)(&mut x).unwrap();
+                }
+                Err(e) => todo!(),
             }
-            Err(e) => todo!(),
         }
 
-        panic!()
+        panic!("Done!")
     }
 }
