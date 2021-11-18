@@ -54,51 +54,40 @@ where
 }
 
 #[derive(Clone)]
-pub struct SeqTok<'a> {
-    pub(crate) inner: &'a [RuntimeWord<Toker<'a>, SeqTok<'a>>],
+pub struct Toker {
+    bi: Builtin,
 }
 
-impl<'a> FuncSeq<Toker<'a>, SeqTok<'a>> for SeqTok<'a> {
-    fn get(&self, idx: usize) -> Option<RuntimeWord<Toker<'a>, SeqTok<'a>>> {
-        self.inner.get(idx).map(Clone::clone)
-    }
-}
-
-#[derive(Clone)]
-pub struct Toker<'a> {
-    bi: Builtin<'a>,
-}
-
-impl<'a> Toker<'a> {
-    pub fn new(bi: Builtin<'a>) -> Self {
+impl Toker {
+    pub fn new(bi: Builtin) -> Self {
         Self {
             bi
         }
     }
 
-    pub fn exec(&self, rt: &mut StdRuntime<'a>) -> Result<(), Error> {
+    pub fn exec(&self, rt: &mut StdRuntime) -> Result<(), Error> {
         (self.bi)(rt)
     }
 }
 
 
-pub type StdRuntime<'a> = Runtime<
-    Toker<'a>,
-    StdFuncSeq<'a>,
+pub type StdRuntime = Runtime<
+    Toker,
+    StdFuncSeq,
     StdVecStack<i32>,
-    StdVecStack<RuntimeSeqCtx<Toker<'a>, StdFuncSeq<'a>>>,
+    StdVecStack<RuntimeSeqCtx<Toker, StdFuncSeq>>,
     String,
 >;
 
 #[derive(Clone)]
-pub struct StdFuncSeq<'a> {
-    pub inner: Vec<RuntimeWord<Toker<'a>, StdFuncSeq<'a>>>,
+pub struct StdFuncSeq {
+    pub inner: Vec<RuntimeWord<Toker, StdFuncSeq>>,
 }
 
-impl<'a> FuncSeq<Toker<'a>, Self> for StdFuncSeq<'a>
+impl FuncSeq<Toker, Self> for StdFuncSeq
 where
 {
-    fn get(&self, idx: usize) -> Option<RuntimeWord<Toker<'a>, Self>> {
+    fn get(&self, idx: usize) -> Option<RuntimeWord<Toker, Self>> {
         match self.inner.get(idx) {
             Some(artw) => Some(artw.clone()),
             None => None,
@@ -106,16 +95,16 @@ where
     }
 }
 
-pub type StdRuntimeWord<'a> = RuntimeWord<
-    Toker<'a>,
-    StdFuncSeq<'a>,
+pub type StdRuntimeWord = RuntimeWord<
+    Toker,
+    StdFuncSeq,
 >;
 
-type Builtin<'a> = fn(
-    &mut StdRuntime<'a>,
+type Builtin = fn(
+    &mut StdRuntime,
 ) -> Result<(), Error>;
 
-pub fn new_runtime<'a>() -> StdRuntime<'a> {
+pub fn new_runtime() -> StdRuntime {
     // These are the only data structures required, and Runtime is generic over the
     // stacks, so I could easily use heapless::Vec as a backing structure as well
     let ds = StdVecStack::new(Error::DataStackEmpty);
@@ -134,8 +123,8 @@ pub fn new_runtime<'a>() -> StdRuntime<'a> {
     }
 }
 
-pub fn new_funcs<'a>() -> Vec<(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)> {
-    vec![
+pub fn std_builtins() -> &'static [(&'static str, fn(&mut StdRuntime) -> Result<(), Error>)] {
+    &[
         ("emit", crate::builtins::bi_emit),
         (".", crate::builtins::bi_pop),
         ("cr", crate::builtins::bi_cr),
@@ -148,49 +137,3 @@ pub fn new_funcs<'a>() -> Vec<(&'static str, fn(&mut StdRuntime<'a>) -> Result<(
         ("+", crate::builtins::bi_add),
     ]
 }
-
-// pub const STD_BUILT_IN_WORDS: &[(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)] = &[
-//     ("emit", crate::builtins::bi_emit),
-//     (".", crate::builtins::bi_pop),
-//     ("cr", crate::builtins::bi_cr),
-//     (">r", crate::builtins::bi_retstk_push),
-//     ("r>", crate::builtins::bi_retstk_pop),
-//     ("=", crate::builtins::bi_eq),
-//     ("<", crate::builtins::bi_lt),
-//     (">", crate::builtins::bi_gt),
-//     ("dup", crate::builtins::bi_dup),
-//     ("+", crate::builtins::bi_add),
-//     // TODO: This requires the ability to modify the input stream!
-//     //
-//     // This is supposed to return the address of the NEXT word in the
-//     // input stream
-//     //
-//     // ("'", bi_tick)
-
-//     // ( @ is the "load operator )  ok
-//     // ( ! is the "store operator" )  ok
-
-//     // Constants store a VALUE in the dict, which will be pushed on the stack
-//     //
-//     // I *think*:
-//     //
-//     // 5 CONSTANT X
-//     //
-//     // is equivalent to:
-//     //
-//     // : X 5 ;
-
-//     // Variables store the value, and put the ADDRESS on the stack when invoked
-//     //
-//     // I *think*:
-//     //
-//     // 0 VARIABLE ZERO
-//     //
-//     // is equvalent to:
-//     //
-//     // ).unwrap().unwrap()
-
-//     // Debug
-//     // ("serdump", crate::builtins::bi_serdump),
-//     // ("coredump", crate::builtins::bi_coredump),
-// ];

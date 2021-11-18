@@ -71,8 +71,8 @@ use afc::{std_rt::StdRuntime, Error};
 //     word: Arc<Word<Sdata, Sexec>>,
 // }
 
-pub struct Dict<'a> {
-    pub(crate) data: BTreeMap<String, StdRuntimeWord<'a>>,
+pub struct Dict {
+    pub(crate) data: BTreeMap<String, StdRuntimeWord>,
 }
 
 // #[derive(Debug, Serialize)]
@@ -80,7 +80,7 @@ pub struct Dict<'a> {
 //     data: BTreeMap<String, SerWord>,
 // }
 
-impl<'a> Dict<'a> {
+impl Dict {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -101,12 +101,12 @@ impl<'a> Dict<'a> {
     //     }
 }
 
-pub struct Context<'a> {
-    pub rt: StdRuntime<'a>,
-    dict: Dict<'a>,
+pub struct Context {
+    pub rt: StdRuntime,
+    dict: Dict,
 }
 
-impl<'a> Context<'a> {
+impl Context {
     //     pub fn serialize(&self) -> SerDict {
     //         let mut dict = self.dict.serialize();
 
@@ -136,7 +136,7 @@ impl<'a> Context<'a> {
     //         dict
     //     }
 
-    pub fn step(&mut self) -> Result<StepResult<Toker<'a>>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<Toker>, Error> {
         self.rt.step()
     }
 
@@ -152,7 +152,7 @@ impl<'a> Context<'a> {
     //         &self.flow_stk
     //     }
 
-    pub fn with_builtins(bi: &[(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)]) -> Self {
+    pub fn with_builtins(bi: &[(&'static str, fn(&mut StdRuntime) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
             rt: new_runtime(),
             dict: Dict::new(),
@@ -172,7 +172,7 @@ impl<'a> Context<'a> {
         self.rt.exchange_output()
     }
 
-    pub fn push_exec(&mut self, word: StdRuntimeWord<'a>) {
+    pub fn push_exec(&mut self, word: StdRuntimeWord) {
         self.rt.push_exec(word)
     }
 }
@@ -187,10 +187,10 @@ fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
 
-fn compile<'a>(
-    ctxt: &mut Context<'a>,
+fn compile(
+    ctxt: &mut Context,
     data: &[String],
-) -> Result<Vec<StdRuntimeWord<'a>>, Error> {
+) -> Result<Vec<StdRuntimeWord>, Error> {
     let mut output = Vec::new();
 
     let lowered = data
@@ -324,7 +324,7 @@ fn compile<'a>(
     Ok(output)
 }
 
-pub fn evaluate<'a>(ctxt: &mut Context<'a>, data: Vec<String>) -> Result<(), Error> {
+pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
     match (data.first(), data.last()) {
         (Some(f), Some(l)) if f == ":" && l == ";" => {
             // Must have ":", "$NAME", "$SOMETHING+", ";"

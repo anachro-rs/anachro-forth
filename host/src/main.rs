@@ -2,15 +2,13 @@ use anachro_forth_host::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
-// use anachro_forth_host::builtins::BUILT_IN_WORDS;
-// use anachro_forth_host::*;
 use anachro_forth_core::{Error, StepResult};
 use anachro_forth_host::Context;
-use anachro_forth_core::std_rt::new_funcs;
+use anachro_forth_core::std_rt::std_builtins;
 
 fn main() -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(
-        &new_funcs()
+        std_builtins()
     );
 
     loop {
