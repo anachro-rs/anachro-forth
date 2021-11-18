@@ -1,19 +1,26 @@
+use anachro_forth_host::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
-use anachro_forth_host::builtins::BUILT_IN_WORDS;
-use anachro_forth_host::*;
-use anachro_forth_core::*;
+// use anachro_forth_host::builtins::BUILT_IN_WORDS;
+// use anachro_forth_host::*;
+use anachro_forth_core::{Error, StepResult};
+use anachro_forth_host::Context;
+use anachro_forth_core::std_rt::new_funcs;
 
 fn main() -> Result<(), Error> {
-    let mut ctxt = Context::with_builtins(BUILT_IN_WORDS);
+    let mut ctxt = Context::with_builtins(
+        &new_funcs()
+    );
 
     loop {
         let input = read().map_err(|_| Error::Input)?;
         evaluate(&mut ctxt, input)?;
         let is_ok = loop {
             match ctxt.step() {
-                Ok(StepResult::Working) => {}
+                Ok(StepResult::Working(f)) => {
+                    f.exec(&mut ctxt.rt)?;
+                }
                 Ok(StepResult::Done) => break true,
                 Err(e) => {
                     eprintln!("ERROR! -> {:?}", e);
@@ -21,11 +28,11 @@ fn main() -> Result<(), Error> {
                 }
             }
         };
-        let ser = ctxt.serialize();
-        println!("{:?}", ser);
-        let pcser = postcard::to_stdvec(&ser).unwrap();
-        println!("{:02X?}", pcser);
-        println!("{}", pcser.len());
+        // let ser = ctxt.serialize();
+        // println!("{:?}", ser);
+        // let pcser = postcard::to_stdvec(&ser).unwrap();
+        // println!("{:02X?}", pcser);
+        // println!("{}", pcser.len());
         print(&mut ctxt, is_ok);
     }
 }

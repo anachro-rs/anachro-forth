@@ -1,283 +1,179 @@
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::{collections::BTreeMap, ops::Deref};
-use serde::Serialize;
+// use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+// use serde::Serialize;
 
+use afc::std_rt::{new_runtime, StdFuncSeq, StdRuntimeWord, Toker};
+use afc::{RuntimeWord, StepResult};
 use anachro_forth_core as afc;
 
-use afc::{Error, Stack, StepResult, ExecStack, RuntimeSeqCtx, RefWord, Runtime};
+use afc::{std_rt::StdRuntime, Error};
 
-pub mod builtins;
+// // use afc::{Error, Stack, StepResult, ExecStack, RuntimeSeqCtx, RuntimeWord, Runtime};
 
-#[derive(Clone)]
-pub enum Word<Sdata, Sexec> {
-    LiteralVal(i32),
-    Builtin {
-        name: &'static str,
-        func: fn(&mut Runtime<Sdata, Sexec>) -> Result<(), Error>,
-    },
-    Compiled {
-        name: String,
-        data: Vec<Arc<Word>>,
-    },
-    UncondRelativeJump { offset: i32 },
-    CondRelativeJump { offset: i32, jump_on: bool },
+// // pub mod builtins;
+
+// #[derive(Clone)]
+// pub enum Word<'a> {
+//     LiteralVal(i32),
+//     Builtin {
+//         name: &'static str,
+//         func: fn(&mut StdRuntime<'a>) -> Result<(), Error>,
+//     },
+//     Compiled {
+//         name: String,
+//         data: Vec<Arc<Word<'a>>>,
+//     },
+//     UncondRelativeJump {
+//         offset: i32,
+//     },
+//     CondRelativeJump {
+//         offset: i32,
+//         jump_on: bool,
+//     },
+// }
+
+// #[derive(Debug, Serialize)]
+// pub enum SerWord {
+//     LiteralVal(i32),
+//     Builtin {
+//         name: &'static str,
+//     },
+//     CompiledDefn(Vec<SerWord>),
+//     CompiledRef(String),
+//     UncondRelativeJump { offset: i32 },
+//     CondRelativeJump { offset: i32, jump_on: bool },
+// }
+
+// impl<Sdata, Sexec> Word<Sdata, Sexec> {
+//     fn serialize(&self, toplevel: bool) -> SerWord {
+//         match self {
+//             Word::LiteralVal(lit) => SerWord::LiteralVal(*lit),
+//             Word::Builtin{ name, .. } => SerWord::Builtin { name },
+//             Word::Compiled { name, data: comp } => {
+//                 if toplevel {
+//                     let mut out = Vec::new();
+//                     for c in comp.iter() {
+//                         out.push(c.serialize(false));
+//                     }
+//                     SerWord::CompiledDefn(out)
+//                 } else {
+//                     SerWord::CompiledRef(name.clone())
+//                 }
+//             },
+//             Word::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+//             Word::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+//         }
+//     }
+// }
+
+// pub struct ExecCtx<Sdata, Sexec> {
+//     idx: usize,
+//     word: Arc<Word<Sdata, Sexec>>,
+// }
+
+pub struct Dict<'a> {
+    pub(crate) data: BTreeMap<String, StdRuntimeWord<'a>>,
 }
 
-#[derive(Debug, Serialize)]
-pub enum SerWord {
-    LiteralVal(i32),
-    Builtin {
-        name: &'static str,
-    },
-    CompiledDefn(Vec<SerWord>),
-    CompiledRef(String),
-    UncondRelativeJump { offset: i32 },
-    CondRelativeJump { offset: i32, jump_on: bool },
-}
+// #[derive(Debug, Serialize)]
+// pub struct SerDict {
+//     data: BTreeMap<String, SerWord>,
+// }
 
-impl<Sdata, Sexec> Word<Sdata, Sexec> {
-    fn serialize(&self, toplevel: bool) -> SerWord {
-        match self {
-            Word::LiteralVal(lit) => SerWord::LiteralVal(*lit),
-            Word::Builtin{ name, .. } => SerWord::Builtin { name },
-            Word::Compiled { name, data: comp } => {
-                if toplevel {
-                    let mut out = Vec::new();
-                    for c in comp.iter() {
-                        out.push(c.serialize(false));
-                    }
-                    SerWord::CompiledDefn(out)
-                } else {
-                    SerWord::CompiledRef(name.clone())
-                }
-            },
-            Word::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
-            Word::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
-        }
-    }
-}
-
-pub struct ExecCtx<Sdata, Sexec> {
-    idx: usize,
-    word: Arc<Word<Sdata, Sexec>>,
-}
-
-pub struct Dict {
-    pub(crate) data: BTreeMap<String, Arc<Word<Sdata, Sexec>>>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SerDict {
-    data: BTreeMap<String, SerWord>,
-}
-
-impl Dict {
+impl<'a> Dict<'a> {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
         }
     }
 
-    pub fn serialize(&self) -> SerDict {
-        let new = self.clone();
-        let mut out = SerDict {
-            data: BTreeMap::new()
-        };
+    //     pub fn serialize(&self) -> SerDict {
+    //         let new = self.clone();
+    //         let mut out = SerDict {
+    //             data: BTreeMap::new()
+    //         };
 
-        for (word, val) in new.data.iter() {
-            out.data.insert(word.clone(), val.serialize(true));
-        }
+    //         for (word, val) in new.data.iter() {
+    //             out.data.insert(word.clone(), val.serialize(true));
+    //         }
 
-        out
-    }
+    //         out
+    //     }
 }
 
-#[derive(Debug)]
-pub struct StdVecStack<T> {
-    data: Vec<T>,
-    err: Error,
+pub struct Context<'a> {
+    pub rt: StdRuntime<'a>,
+    dict: Dict<'a>,
 }
 
-impl<T> StdVecStack<T> {
-    pub fn new(err: Error) -> Self {
-        StdVecStack {
-            data: Vec::new(),
-            err,
-        }
-    }
-}
+impl<'a> Context<'a> {
+    //     pub fn serialize(&self) -> SerDict {
+    //         let mut dict = self.dict.serialize();
 
-impl<T> Stack for StdVecStack<T> {
-    type Item = T;
+    //         let mut bi_set = BTreeSet::new();
 
-    fn push(&mut self, data: T) {
-        self.data.push(data);
-    }
+    //         for (_key, var) in dict.data.iter() {
+    //             if let SerWord::CompiledDefn(cwrd) = var {
+    //                 for w in cwrd {
+    //                     if let SerWord::Builtin { name } = w {
+    //                         bi_set.insert(*name);
+    //                     }
+    //                 }
+    //             }
+    //         }
 
-    fn pop(&mut self) -> Result<T, Error> {
-        self.data.pop().ok_or(Error::DataStackUnderflow)
-    }
+    //         dict.data.retain(|_k, v| {
+    //             match v {
+    //                 SerWord::LiteralVal(_) => true,
+    //                 SerWord::Builtin { .. } => false,
+    //                 SerWord::CompiledDefn(_) => true,
+    //                 SerWord::CompiledRef(_) => todo!(),
+    //                 SerWord::UncondRelativeJump { .. } => true,
+    //                 SerWord::CondRelativeJump { .. } => true,
+    //             }
+    //         });
 
-    fn last(&self) -> Result<&T, Error> {
-        self.data.last().ok_or(self.err.clone())
-    }
+    //         dict
+    //     }
 
-    fn last_mut(&mut self) -> Result<&mut T, Error> {
-        self.data.last_mut().ok_or(self.err.clone())
-    }
-
-    fn get_mut(&mut self, index: usize) -> Result<&mut T, Error> {
-        self.data.get_mut(index).ok_or(self.err.clone())
-    }
-
-    fn len(&self) -> usize {
-        self.data.len()
-    }
-}
-
-struct FlowBoi<'a> {
-    flow_stk: &'a mut StdVecStack<ExecCtx<StdVecStack<i32>, FlowBoi<'a>>>,
-    dict: &'a mut Dict,
-}
-
-impl<'a> From<RuntimeSeqCtx<'a, StdVecStack<i32>, FlowBoi<'a>>> for ExecCtx<StdVecStack<i32>, FlowBoi<'a>> {
-    fn from(other: RuntimeSeqCtx<'a, StdVecStack<i32>, FlowBoi<'a>>) -> ExecCtx {
-        ExecCtx {
-            idx: other.idx,
-            word: Arc::new(match other.word {
-                RefWord::LiteralVal(val) => Word::LiteralVal(val),
-                RefWord::Builtin { name, func } => Word::Builtin {
-                    func, name
-                },
-                RefWord::Compiled { name, data } => todo!(),
-                RefWord::UncondRelativeJump { offset } => Word::UncondRelativeJump { offset },
-                RefWord::CondRelativeJump { offset, jump_on } => Word::CondRelativeJump { offset, jump_on },
-            })
-        }
-    }
-}
-
-impl<'a> ExecStack<'a, StdVecStack<i32>> for FlowBoi<'a> {
-    fn push(&mut self, data: RuntimeSeqCtx<'a, StdVecStack<i32>, Self>) {
-        self.flow_stk.data.push(data.into());
+    pub fn step(&mut self) -> Result<StepResult<Toker<'a>>, Error> {
+        self.rt.step()
     }
 
-    fn pop(&mut self) -> Result<RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
-        // self.data.pop().ok_or(Error::DataStackUnderflow).map(|d| {
-        //     todo!()
-        // })
-        todo!()
-    }
+    //     pub fn data_stack(&self) -> &StdVecStack<i32> {
+    //         &self.data_stk
+    //     }
 
-    fn last(&self) -> Result<&RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
-        // self.data.last().ok_or(self.err.clone()).map(|d| todo!())
-        todo!()
-    }
+    //     pub fn return_stack(&self) -> &StdVecStack<i32> {
+    //         &self.ret_stk
+    //     }
 
-    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
-        // self.data.last_mut().ok_or(self.err.clone()).map(|d| todo!())
-        todo!()
-    }
+    //     pub fn flow_stack(&self) -> &StdVecStack<ExecCtx> {
+    //         &self.flow_stk
+    //     }
 
-    fn get_mut(&mut self, index: usize) -> Result<&mut RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
-        // self.data.get_mut(index).ok_or(self.err.clone()).map(|d| todo!())
-        todo!()
-    }
-
-    fn len(&self) -> usize {
-        // self.data.len()
-        todo!()
-    }
-}
-
-pub struct Context {
-    data_stk: StdVecStack<i32>,
-    ret_stk: StdVecStack<i32>,
-    flow_stk: StdVecStack<ExecCtx>,
-    dict: Dict,
-    cur_output: String,
-}
-
-impl Context {
-    pub fn serialize(&self) -> SerDict {
-        let mut dict = self.dict.serialize();
-
-        let mut bi_set = BTreeSet::new();
-
-        for (_key, var) in dict.data.iter() {
-            if let SerWord::CompiledDefn(cwrd) = var {
-                for w in cwrd {
-                    if let SerWord::Builtin { name } = w {
-                        bi_set.insert(*name);
-                    }
-                }
-            }
-        }
-
-        dict.data.retain(|_k, v| {
-            match v {
-                SerWord::LiteralVal(_) => true,
-                SerWord::Builtin { .. } => false,
-                SerWord::CompiledDefn(_) => true,
-                SerWord::CompiledRef(_) => todo!(),
-                SerWord::UncondRelativeJump { .. } => true,
-                SerWord::CondRelativeJump { .. } => true,
-            }
-        });
-
-        dict
-    }
-
-    pub fn step(&mut self) -> Result<StepResult, Error> {
-        let mut lol = afc::Runtime {
-            data_stk: &mut self.data_stk,
-            flow_stk: &mut FlowBoi {
-                flow_stk: &mut self.flow_stk,
-                dict: &mut self.dict,
-            },
-            ret_stk: &mut self.ret_stk,
-        };
-
-        todo!()
-    }
-
-    pub fn data_stack(&self) -> &StdVecStack<i32> {
-        &self.data_stk
-    }
-
-    pub fn return_stack(&self) -> &StdVecStack<i32> {
-        &self.ret_stk
-    }
-
-    pub fn flow_stack(&self) -> &StdVecStack<ExecCtx> {
-        &self.flow_stk
-    }
-
-    pub fn with_builtins(bi: &[(&'static str, fn(&mut Context) -> Result<(), Error>)]) -> Self {
+    pub fn with_builtins(bi: &[(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
-            data_stk: StdVecStack::new(Error::DataStackEmpty),
-            ret_stk: StdVecStack::new(Error::RetStackEmpty),
-            flow_stk: StdVecStack::new(Error::FlowStackEmpty),
+            rt: new_runtime(),
             dict: Dict::new(),
-            cur_output: String::new(),
         };
 
         for (word, func) in bi {
-            new.dict.data.insert(word.to_string(), Arc::new(Word::Builtin { name: word, func: *func }));
+            new.dict.data.insert(
+                word.to_string(),
+                RuntimeWord::Verb(Toker::new(*func)),
+            );
         }
 
         new
     }
 
     pub fn output(&mut self) -> String {
-        let mut new_out = String::new();
-        core::mem::swap(&mut self.cur_output, &mut new_out);
-        new_out
+        self.rt.exchange_output()
     }
 
-    pub fn push_exec(&mut self, word: Arc<Word>) {
-        Stack::push(&mut self.flow_stk, ExecCtx { idx: 0, word });
+    pub fn push_exec(&mut self, word: StdRuntimeWord<'a>) {
+        self.rt.push_exec(word)
     }
 }
 
@@ -291,7 +187,10 @@ fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
 
-fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error> {
+fn compile<'a>(
+    ctxt: &mut Context<'a>,
+    data: &[String],
+) -> Result<Vec<StdRuntimeWord<'a>>, Error> {
     let mut output = Vec::new();
 
     let lowered = data
@@ -331,10 +230,10 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                     _ => return Err(Error::InternalError),
                 } as i32;
 
-                Arc::new(Word::CondRelativeJump {
+                RuntimeWord::CondRelativeJump {
                     offset,
                     jump_on: false,
-                })
+                }
             }
             "else" => {
                 // All we need to do on an else is insert an unconditional jump to the then.
@@ -351,7 +250,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 // appear in the compiled output
                 let offset = offset as i32 - 1;
 
-                Arc::new(Word::UncondRelativeJump { offset })
+                RuntimeWord::UncondRelativeJump { offset }
             }
             "then" => {
                 then_ct += 1;
@@ -359,13 +258,19 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
                 continue;
             }
             "do" => {
-                output.push(Arc::new(Word::Builtin { name: ">r", func: builtins::bi_retstk_push }));
-                output.push(Arc::new(Word::Builtin { name: ">r", func: builtins::bi_retstk_push }));
+                output.push(RuntimeWord::Verb(Toker::new(
+                    afc::builtins::bi_retstk_push,
+                )));
+                output.push(RuntimeWord::Verb(Toker::new(
+                    afc::builtins::bi_retstk_push,
+                )));
                 do_ct += 1;
                 continue;
             }
             "loop" => {
-                output.push(Arc::new(Word::Builtin { name: "PRIV_LOOP", func: builtins::bi_priv_loop }));
+                output.push(RuntimeWord::Verb(Toker::new(
+                    afc::builtins::bi_priv_loop,
+                )));
 
                 let mut count: usize = do_ct - loop_ct;
                 let offset = lowered[..idx]
@@ -386,18 +291,18 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
 
                 loop_ct += 1;
 
-                Arc::new(Word::CondRelativeJump {
+                RuntimeWord::CondRelativeJump {
                     offset: (-1i32 * offset as i32) - 2,
                     jump_on: false,
-                })
+                }
             }
 
             // Now, check for "normal" words, e.g. numeric literals or dictionary words
             other => {
                 if let Some(dword) = ctxt.dict.data.get(other).cloned() {
                     dword
-                } else if let Some(num) = parse_num(other).map(Word::LiteralVal) {
-                    Arc::new(num)
+                } else if let Some(num) = parse_num(other).map(RuntimeWord::LiteralVal) {
+                    num
                 } else {
                     return Err(Error::InternalError);
                 }
@@ -419,7 +324,7 @@ fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<Arc<Word>>, Error>
     Ok(output)
 }
 
-pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
+pub fn evaluate<'a>(ctxt: &mut Context<'a>, data: Vec<String>) -> Result<(), Error> {
     match (data.first(), data.last()) {
         (Some(f), Some(l)) if f == ":" && l == ";" => {
             // Must have ":", "$NAME", "$SOMETHING+", ";"
@@ -432,15 +337,15 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
 
             let compiled = compile(ctxt, relevant)?;
 
-            ctxt.dict.data.insert(name.clone(), Arc::new(Word::Compiled {
-                name,
-                data: compiled,
-            }));
+            ctxt.dict.data.insert(
+                name.clone(),
+                RuntimeWord::VerbSeq(StdFuncSeq { inner: compiled }),
+            );
         }
         _ => {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
-            let temp_compiled = Arc::new(Word::Compiled { name: "_".into(), data: compile(ctxt, &data)? });
+            let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner: compile(ctxt, &data)? });
             ctxt.push_exec(temp_compiled);
         }
     }

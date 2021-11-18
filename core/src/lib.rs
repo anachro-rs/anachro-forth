@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 use core::{fmt::Write, marker::PhantomData};
 
@@ -265,6 +265,9 @@ pub trait Stack {
 
     fn push(&mut self, data: Self::Item);
     fn pop(&mut self) -> Result<Self::Item, Error>;
+
+    // Needed for builtins
+    fn last(&self) -> Result<&Self::Item, Error>;
 }
 
 pub trait ExecutionStack<T, F>

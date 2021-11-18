@@ -6,7 +6,6 @@ use crate::RuntimeSeqCtx;
 use crate::FuncSeq;
 use crate::{Error, Stack, ExecutionStack};
 
-
 #[derive(Debug)]
 pub struct StdVecStack<T> {
     data: Vec<T>,
@@ -31,6 +30,10 @@ impl<T> Stack for StdVecStack<T> {
 
     fn pop(&mut self) -> Result<T, Error> {
         self.data.pop().ok_or(Error::DataStackUnderflow)
+    }
+
+    fn last(&self) -> Result<&Self::Item, Error> {
+        self.data.last().ok_or(Error::InternalError) // TODO: Wrong error!
     }
 }
 
@@ -79,12 +82,33 @@ impl<'a> Toker<'a> {
 }
 
 
-type StdRuntime<'a> = Runtime<
+pub type StdRuntime<'a> = Runtime<
     Toker<'a>,
-    SeqTok<'a>,
+    StdFuncSeq<'a>,
     StdVecStack<i32>,
-    StdVecStack<RuntimeSeqCtx<Toker<'a>, SeqTok<'a>>>,
+    StdVecStack<RuntimeSeqCtx<Toker<'a>, StdFuncSeq<'a>>>,
     String,
+>;
+
+#[derive(Clone)]
+pub struct StdFuncSeq<'a> {
+    pub inner: Vec<RuntimeWord<Toker<'a>, StdFuncSeq<'a>>>,
+}
+
+impl<'a> FuncSeq<Toker<'a>, Self> for StdFuncSeq<'a>
+where
+{
+    fn get(&self, idx: usize) -> Option<RuntimeWord<Toker<'a>, Self>> {
+        match self.inner.get(idx) {
+            Some(artw) => Some(artw.clone()),
+            None => None,
+        }
+    }
+}
+
+pub type StdRuntimeWord<'a> = RuntimeWord<
+    Toker<'a>,
+    StdFuncSeq<'a>,
 >;
 
 type Builtin<'a> = fn(
@@ -109,3 +133,64 @@ pub fn new_runtime<'a>() -> StdRuntime<'a> {
         cur_output: String::new(),
     }
 }
+
+pub fn new_funcs<'a>() -> Vec<(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)> {
+    vec![
+        ("emit", crate::builtins::bi_emit),
+        (".", crate::builtins::bi_pop),
+        ("cr", crate::builtins::bi_cr),
+        (">r", crate::builtins::bi_retstk_push),
+        ("r>", crate::builtins::bi_retstk_pop),
+        ("=", crate::builtins::bi_eq),
+        ("<", crate::builtins::bi_lt),
+        (">", crate::builtins::bi_gt),
+        ("dup", crate::builtins::bi_dup),
+        ("+", crate::builtins::bi_add),
+    ]
+}
+
+// pub const STD_BUILT_IN_WORDS: &[(&'static str, fn(&mut StdRuntime<'a>) -> Result<(), Error>)] = &[
+//     ("emit", crate::builtins::bi_emit),
+//     (".", crate::builtins::bi_pop),
+//     ("cr", crate::builtins::bi_cr),
+//     (">r", crate::builtins::bi_retstk_push),
+//     ("r>", crate::builtins::bi_retstk_pop),
+//     ("=", crate::builtins::bi_eq),
+//     ("<", crate::builtins::bi_lt),
+//     (">", crate::builtins::bi_gt),
+//     ("dup", crate::builtins::bi_dup),
+//     ("+", crate::builtins::bi_add),
+//     // TODO: This requires the ability to modify the input stream!
+//     //
+//     // This is supposed to return the address of the NEXT word in the
+//     // input stream
+//     //
+//     // ("'", bi_tick)
+
+//     // ( @ is the "load operator )  ok
+//     // ( ! is the "store operator" )  ok
+
+//     // Constants store a VALUE in the dict, which will be pushed on the stack
+//     //
+//     // I *think*:
+//     //
+//     // 5 CONSTANT X
+//     //
+//     // is equivalent to:
+//     //
+//     // : X 5 ;
+
+//     // Variables store the value, and put the ADDRESS on the stack when invoked
+//     //
+//     // I *think*:
+//     //
+//     // 0 VARIABLE ZERO
+//     //
+//     // is equvalent to:
+//     //
+//     // ).unwrap().unwrap()
+
+//     // Debug
+//     // ("serdump", crate::builtins::bi_serdump),
+//     // ("coredump", crate::builtins::bi_coredump),
+// ];
