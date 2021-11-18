@@ -1,6 +1,6 @@
-// #![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
-use core::marker::PhantomData;
+use core::{fmt::Write, marker::PhantomData};
 
 pub mod builtins;
 
@@ -130,26 +130,28 @@ where
 //     pub word: RefWord<'dict, Sdata, Sexec, Dict>,
 // }
 
-pub struct Runtime<T, F, Sdata, Sexec>
+pub struct Runtime<T, F, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecStack2<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
+    O: Write,
 {
     pub data_stk: Sdata,
     pub ret_stk: Sdata,
     pub flow_stk: Sexec,
     pub _pd_ty_t_f: PhantomData<(T, F)>,
-    // cur_output: String,
+    cur_output: O,
 }
 
-impl<Sdata, Sexec, T, F> Runtime<T, F, Sdata, Sexec>
+impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecStack2<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
+    O: Write,
 {
     pub fn step(&mut self) -> Result<StepResult<T>, Error> {
         match self.step_inner() {
