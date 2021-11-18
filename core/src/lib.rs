@@ -4,6 +4,9 @@ use core::{fmt::Write, marker::PhantomData};
 
 pub mod builtins;
 
+#[cfg(any(test, feature = "std"))]
+pub mod std_rt;
+
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Failed to write to the "stdout" style output
@@ -262,12 +265,6 @@ pub trait Stack {
 
     fn push(&mut self, data: Self::Item);
     fn pop(&mut self) -> Result<Self::Item, Error>;
-    // fn last(&self) -> Result<&Self::Item, Error>;
-    // fn len(&self) -> usize;
-    // fn last_mut(&mut self) -> Result<&mut Self::Item, Error>;
-
-    // // TODO: This is suspicious...
-    // fn get_mut(&mut self, index: usize) -> Result<&mut Self::Item, Error>;
 }
 
 pub trait ExecutionStack<T, F>
@@ -288,119 +285,17 @@ pub enum StepResult<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use core::marker::PhantomData;
-
-    #[derive(Debug)]
-    pub struct StdVecStack<T> {
-        data: Vec<T>,
-        err: Error,
-    }
-
-    impl<T> StdVecStack<T> {
-        pub fn new(err: Error) -> Self {
-            StdVecStack {
-                data: Vec::new(),
-                err,
-            }
-        }
-    }
-
-    impl<T> Stack for StdVecStack<T> {
-        type Item = T;
-
-        fn push(&mut self, data: T) {
-            self.data.push(data);
-        }
-
-        fn pop(&mut self) -> Result<T, Error> {
-            self.data.pop().ok_or(Error::DataStackUnderflow)
-        }
-
-        // fn last(&self) -> Result<&T, Error> {
-        //     self.data.last().ok_or(self.err.clone())
-        // }
-
-        // fn last_mut(&mut self) -> Result<&mut T, Error> {
-        //     self.data.last_mut().ok_or(self.err.clone())
-        // }
-
-        // fn get_mut(&mut self, index: usize) -> Result<&mut T, Error> {
-        //     self.data.get_mut(index).ok_or(self.err.clone())
-        // }
-
-        // fn len(&self) -> usize {
-        //     self.data.len()
-        // }
-    }
-
-    impl<T, F> ExecutionStack<T, F> for StdVecStack<RuntimeSeqCtx<T, F>>
-    where
-        F: FuncSeq<T, F> + Clone,
-        T: Clone,
-    {
-        fn push(&mut self, data: RuntimeSeqCtx<T, F>) {
-            self.data.push(data)
-        }
-        fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error> {
-            self.data.pop().ok_or(Error::FlowStackEmpty)
-        }
-        fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error> {
-            self.data.last_mut().ok_or(Error::FlowStackEmpty)
-        }
-    }
-
-    #[derive(Clone)]
-    struct SeqTok<'a> {
-        inner: &'a [RuntimeWord<Toker<'a>, SeqTok<'a>>],
-    }
-
-    impl<'a> FuncSeq<Toker<'a>, SeqTok<'a>> for SeqTok<'a> {
-        fn get(&self, idx: usize) -> Option<RuntimeWord<Toker<'a>, SeqTok<'a>>> {
-            self.inner.get(idx).map(Clone::clone)
-        }
-    }
-
-    #[derive(Clone)]
-    struct Toker<'a> {
-        bi: Builtin<'a>,
-    }
-
-    type Builtin<'a> = fn(
-        &mut Runtime<
-            Toker<'a>,
-            SeqTok<'a>,
-            StdVecStack<i32>,
-            StdVecStack<RuntimeSeqCtx<Toker<'a>, SeqTok<'a>>>,
-            String,
-        >,
-    ) -> Result<(), Error>;
+    use crate::std_rt::*;
 
     #[test]
     fn foo() {
-        // These are the only data structures required, and Runtime is generic over the
-        // stacks, so I could easily use heapless::Vec as a backing structure as well
-        let ds = StdVecStack::new(Error::DataStackEmpty);
-        let rs = StdVecStack::new(Error::RetStackEmpty);
-        let fs = StdVecStack::new(Error::FlowStackEmpty);
-
-        // This is a generic Runtime type, I'll likely define two versions:
-        // One with std-ability (for the host), and one no-std one, so users
-        // wont have to deal with all the generic shenanigans
-        let mut x = Runtime {
-            data_stk: ds,
-            ret_stk: rs,
-            flow_stk: fs,
-            _pd_ty_t_f: PhantomData,
-            cur_output: String::new(),
-        };
+        let mut x = new_runtime();
 
         // Manually craft a word, roughly:
         // : star 42 emit ;
         let pre_seq = [
             RuntimeWord::LiteralVal(42),
-            RuntimeWord::Verb(Toker {
-                bi: builtins::bi_emit,
-            }),
+            RuntimeWord::Verb(Toker::new(builtins::bi_emit)),
         ];
 
         // Manually craft another word, roughly:
@@ -431,7 +326,7 @@ mod test {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
-                    (ft.bi)(&mut x).unwrap();
+                    ft.exec(&mut x).unwrap();
                 }
                 Err(_e) => todo!(),
             }
