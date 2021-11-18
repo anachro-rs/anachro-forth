@@ -296,6 +296,21 @@ where
     }
 }
 
+impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
+where
+    Sdata: Stack<Item = i32>,
+    Sexec: ExecStack2<T, F>,
+    F: FuncSeq<T, F> + Clone,
+    T: Clone,
+    O: Write + Default,
+{
+    pub fn exchange_output(&mut self) -> O {
+        let mut new = O::default();
+        core::mem::swap(&mut new, &mut self.cur_output);
+        new
+    }
+}
+
 pub trait Stack {
     type Item;
 
@@ -355,11 +370,8 @@ pub enum StepResult<T> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::BTreeMap;
     use core::marker::PhantomData;
-
     use super::*;
-
 
     #[derive(Debug)]
     pub struct StdVecStack<T> {
@@ -431,24 +443,6 @@ mod test {
         }
     }
 
-    // pub struct StdMapDict<'a, Sdata, Sexec>
-    // where
-    //     Sdata: Stack<Item = i32>,
-    //     Sexec: ExecStack<'a, Sdata, Self>,
-    // {
-    //     data: BTreeMap<String, RefWord<'a, Sdata, Sexec, Self>>,
-    // }
-
-    // impl<'dict, Sdata, Sexec> RoDict<'dict, Sdata, Sexec> for StdMapDict<'dict, Sdata, Sexec>
-    // where
-    //     Sdata: Stack<Item = i32> + 'dict,
-    //     Sexec: ExecStack<'dict, Sdata, Self> + 'dict,
-    // {
-    //     fn get<'a>(&self, name: &'a str) -> Option<&'dict RefWord<'dict, Sdata, Sexec, Self>> {
-    //         todo!()
-    //     }
-    // }
-
     #[derive(Clone)]
     struct SeqTok<'a> {
         inner: &'a [RefWord2<Toker<'a>, SeqTok<'a>>],
@@ -472,24 +466,18 @@ mod test {
             StdVecStack<i32>,
             StdVecStack<
                 RefExecCtx2<Toker<'a>, SeqTok<'a>>
-            >
+            >,
+            String,
         >
     ) -> Result<(), Error>;
-
-// pub fn bi_emit<T, F, Sdata, Sexec>(ctxt: &mut Runtime<T, F, Sdata, Sexec>) -> Result<(), Error>
-// where
-//    Sdata: Stack<Item = i32>,
-//    Sexec: ExecStack2<T, F>,
-//    F: FuncSeq<T, F> + Clone,
-//    T: Clone,
 
     #[test]
     fn foo() {
         // These are the only data structures required, and Runtime is generic over the
         // stacks, so I could easily use heapless::Vec as a backing structure as well
-        let mut ds = StdVecStack::new(Error::DataStackEmpty);
-        let mut rs = StdVecStack::new(Error::RetStackEmpty);
-        let mut fs = StdVecStack::new(Error::FlowStackEmpty);
+        let ds = StdVecStack::new(Error::DataStackEmpty);
+        let rs = StdVecStack::new(Error::RetStackEmpty);
+        let fs = StdVecStack::new(Error::FlowStackEmpty);
 
         // This is a generic Runtime type, I'll likely define two versions:
         // One with std-ability (for the host), and one no-std one, so users
@@ -499,6 +487,7 @@ mod test {
             ret_stk: rs,
             flow_stk: fs,
             _pd_ty_t_f: PhantomData,
+            cur_output: String::new(),
         };
 
         // Manually craft a word, roughly:
@@ -543,10 +532,12 @@ mod test {
                     // to be resumed at a later time
                     (ft.bi)(&mut x).unwrap();
                 }
-                Err(e) => todo!(),
+                Err(_e) => todo!(),
             }
         }
 
-        panic!("Done!")
+        let output = x.exchange_output();
+
+        assert_eq!("***", &output);
     }
 }
