@@ -1,48 +1,26 @@
 // use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::collections::BTreeMap;
-// use serde::Serialize;
+use serde::Serialize;
 
-use afc::std_rt::{new_runtime, StdFuncSeq, StdRuntimeWord, Toker};
+use afc::std_rt::{BuiltinToken, Hax, StdFuncSeq, StdRuntimeWord, new_runtime};
 use afc::{RuntimeWord, StepResult};
 use anachro_forth_core as afc;
 
 use afc::{std_rt::StdRuntime, Error};
 
-// // use afc::{Error, Stack, StepResult, ExecStack, RuntimeSeqCtx, RuntimeWord, Runtime};
 
-// // pub mod builtins;
-
-// #[derive(Clone)]
-// pub enum Word<'a> {
-//     LiteralVal(i32),
-//     Builtin {
-//         name: &'static str,
-//         func: fn(&mut StdRuntime<'a>) -> Result<(), Error>,
-//     },
-//     Compiled {
-//         name: String,
-//         data: Vec<Arc<Word<'a>>>,
-//     },
-//     UncondRelativeJump {
-//         offset: i32,
-//     },
-//     CondRelativeJump {
-//         offset: i32,
-//         jump_on: bool,
-//     },
-// }
-
-// #[derive(Debug, Serialize)]
-// pub enum SerWord {
-//     LiteralVal(i32),
-//     Builtin {
-//         name: &'static str,
-//     },
-//     CompiledDefn(Vec<SerWord>),
-//     CompiledRef(String),
-//     UncondRelativeJump { offset: i32 },
-//     CondRelativeJump { offset: i32, jump_on: bool },
-// }
+#[derive(Debug, Serialize)]
+pub enum SerWord {
+    LiteralVal(i32),
+    Builtin {
+        name: &'static str,
+    },
+    Verb(String),
+    VerbSeq(Vec<SerWord>),
+    UncondRelativeJump { offset: i32 },
+    CondRelativeJump { offset: i32, jump_on: bool },
+}
 
 // impl<Sdata, Sexec> Word<Sdata, Sexec> {
 //     fn serialize(&self, toplevel: bool) -> SerWord {
@@ -66,19 +44,59 @@ use afc::{std_rt::StdRuntime, Error};
 //     }
 // }
 
-// pub struct ExecCtx<Sdata, Sexec> {
-//     idx: usize,
-//     word: Arc<Word<Sdata, Sexec>>,
-// }
-
-pub struct Dict {
-    pub(crate) data: BTreeMap<String, StdRuntimeWord>,
+// TODO: Is this redundant, now that every word has a name already?
+#[derive(Clone)]
+pub struct NamedStdRuntimeWord {
+    name: String,
+    word: StdRuntimeWord,
 }
 
-// #[derive(Debug, Serialize)]
-// pub struct SerDict {
-//     data: BTreeMap<String, SerWord>,
-// }
+impl NamedStdRuntimeWord {
+    fn serialize(&self, toplevel: bool) -> SerWord {
+        match &self.word {
+            RuntimeWord::LiteralVal(ref lit) => SerWord::LiteralVal(*lit),
+            RuntimeWord::Verb(_t) => SerWord::Verb(self.name.clone()),
+            RuntimeWord::VerbSeq(t) => {
+                if toplevel {
+                    let mut out = Vec::new();
+                    for c in t.inner.iter() {
+                        // Also, redundant?
+                        out.push(NamedStdRuntimeWord { name: c.name.clone(), word: c.word.clone() }.serialize(false));
+                    }
+                    SerWord::VerbSeq(out)
+                } else {
+                    SerWord::Verb(self.name.clone())
+                }
+            }
+            RuntimeWord::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+            RuntimeWord::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+            // Word::LiteralVal(lit) => SerWord::LiteralVal(*lit),
+            // Word::Builtin{ name, .. } => SerWord::Builtin { name },
+            // Word::Compiled { name, data: comp } => {
+            //     if toplevel {
+            //         let mut out = Vec::new();
+            //         for c in comp.iter() {
+            //             out.push(c.serialize(false));
+            //         }
+            //         SerWord::CompiledDefn(out)
+            //     } else {
+            //         SerWord::CompiledRef(name.clone())
+            //     }
+            // },
+            // Word::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+            // Word::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+        }
+    }
+}
+
+pub struct Dict {
+    pub(crate) data: BTreeMap<String, NamedStdRuntimeWord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SerDict {
+    data: BTreeMap<String, SerWord>,
+}
 
 impl Dict {
     pub fn new() -> Self {
@@ -87,18 +105,18 @@ impl Dict {
         }
     }
 
-    //     pub fn serialize(&self) -> SerDict {
-    //         let new = self.clone();
-    //         let mut out = SerDict {
-    //             data: BTreeMap::new()
-    //         };
+        pub fn serialize(&self) -> SerDict {
+            let new = self.clone();
+            let mut out = SerDict {
+                data: BTreeMap::new()
+            };
 
-    //         for (word, val) in new.data.iter() {
-    //             out.data.insert(word.clone(), val.serialize(true));
-    //         }
+            for (word, val) in new.data.iter() {
+                out.data.insert(word.clone(), val.serialize(true));
+            }
 
-    //         out
-    //     }
+            out
+        }
 }
 
 pub struct Context {
@@ -136,7 +154,7 @@ impl Context {
     //         dict
     //     }
 
-    pub fn step(&mut self) -> Result<StepResult<Toker>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<BuiltinToken>, Error> {
         self.rt.step()
     }
 
@@ -161,7 +179,10 @@ impl Context {
         for (word, func) in bi {
             new.dict.data.insert(
                 word.to_string(),
-                RuntimeWord::Verb(Toker::new(*func)),
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::Verb(BuiltinToken::new(*func)),
+                    name: word.to_string(),
+                },
             );
         }
 
@@ -190,8 +211,8 @@ fn parse_num(input: &str) -> Option<i32> {
 fn compile(
     ctxt: &mut Context,
     data: &[String],
-) -> Result<Vec<StdRuntimeWord>, Error> {
-    let mut output = Vec::new();
+) -> Result<Vec<Hax>, Error> {
+    let mut output: Vec<Hax> = Vec::new();
 
     let lowered = data
         .iter()
@@ -230,9 +251,12 @@ fn compile(
                     _ => return Err(Error::InternalError),
                 } as i32;
 
-                RuntimeWord::CondRelativeJump {
-                    offset,
-                    jump_on: false,
+                Hax {
+                    word: RuntimeWord::CondRelativeJump {
+                        offset,
+                        jump_on: false,
+                    },
+                    name: "CRJ".into(),
                 }
             }
             "else" => {
@@ -250,7 +274,10 @@ fn compile(
                 // appear in the compiled output
                 let offset = offset as i32 - 1;
 
-                RuntimeWord::UncondRelativeJump { offset }
+                Hax {
+                    word: RuntimeWord::UncondRelativeJump { offset },
+                    name: "UCRJ".into(),
+                }
             }
             "then" => {
                 then_ct += 1;
@@ -258,19 +285,28 @@ fn compile(
                 continue;
             }
             "do" => {
-                output.push(RuntimeWord::Verb(Toker::new(
-                    afc::builtins::bi_retstk_push,
-                )));
-                output.push(RuntimeWord::Verb(Toker::new(
-                    afc::builtins::bi_retstk_push,
-                )));
+                output.push(Hax {
+                    word: RuntimeWord::Verb(BuiltinToken::new(
+                        afc::builtins::bi_retstk_push,
+                    )),
+                    name: ">r".into(),
+                });
+                output.push(Hax {
+                    word: RuntimeWord::Verb(BuiltinToken::new(
+                        afc::builtins::bi_retstk_push,
+                    )),
+                    name: ">r".into(),
+                });
                 do_ct += 1;
                 continue;
             }
             "loop" => {
-                output.push(RuntimeWord::Verb(Toker::new(
-                    afc::builtins::bi_priv_loop,
-                )));
+                output.push(Hax {
+                    word: RuntimeWord::Verb(BuiltinToken::new(
+                        afc::builtins::bi_priv_loop,
+                    )),
+                    name: "PRIV_LOOP".into(),
+                });
 
                 let mut count: usize = do_ct - loop_ct;
                 let offset = lowered[..idx]
@@ -291,18 +327,27 @@ fn compile(
 
                 loop_ct += 1;
 
-                RuntimeWord::CondRelativeJump {
-                    offset: (-1i32 * offset as i32) - 2,
-                    jump_on: false,
+                Hax {
+                    word: RuntimeWord::CondRelativeJump {
+                        offset: (-1i32 * offset as i32) - 2,
+                        jump_on: false,
+                    },
+                    name: "CRJ".into(),
                 }
             }
 
             // Now, check for "normal" words, e.g. numeric literals or dictionary words
             other => {
                 if let Some(dword) = ctxt.dict.data.get(other).cloned() {
-                    dword
-                } else if let Some(num) = parse_num(other).map(RuntimeWord::LiteralVal) {
-                    num
+                    Hax {
+                        word: dword.word,
+                        name: other.to_string(),
+                    }
+                } else if let Some(num) = parse_num(other) {
+                    Hax {
+                        word: RuntimeWord::LiteralVal(num),
+                        name: format!("LIT({})", num),
+                    }
                 } else {
                     return Err(Error::InternalError);
                 }
@@ -335,17 +380,20 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
             // TODO: Doesn't handle "empty" definitions
             let relevant = &data[2..][..data.len() - 3];
 
-            let compiled = compile(ctxt, relevant)?;
+            let compiled = Arc::new(compile(ctxt, relevant)?);
 
             ctxt.dict.data.insert(
                 name.clone(),
-                RuntimeWord::VerbSeq(StdFuncSeq { inner: compiled }),
+                NamedStdRuntimeWord {
+                    name: name.clone(),
+                    word: RuntimeWord::VerbSeq(StdFuncSeq { inner: compiled }),
+                }
             );
         }
         _ => {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
-            let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner: compile(ctxt, &data)? });
+            let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner: Arc::new(compile(ctxt, &data)?) });
             ctxt.push_exec(temp_compiled);
         }
     }

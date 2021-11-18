@@ -290,8 +290,14 @@ mod test {
         // : star 42 emit ;
         let pre_seq = StdFuncSeq {
             inner: Arc::new(vec![
-                RuntimeWord::LiteralVal(42),
-                RuntimeWord::Verb(Toker::new(builtins::bi_emit)),
+                Hax {
+                    word: RuntimeWord::LiteralVal(42),
+                    name: "42".into(),
+                },
+                Hax {
+                    word: RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
+                    name: "emit".into(),
+                }
             ]),
         };
 
@@ -299,14 +305,14 @@ mod test {
         // : mstar star -1 if star star then ;
         let seq = StdFuncSeq {
             inner: Arc::new(vec![
-                RuntimeWord::VerbSeq(pre_seq.clone()),
-                RuntimeWord::LiteralVal(-1),
-                RuntimeWord::CondRelativeJump {
+                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
+                Hax { word: RuntimeWord::LiteralVal(-1), name: "-1".into() },
+                Hax { word: RuntimeWord::CondRelativeJump {
                     offset: 2,
                     jump_on: false,
-                },
-                RuntimeWord::VerbSeq(pre_seq.clone()),
-                RuntimeWord::VerbSeq(pre_seq.clone()),
+                }, name: "UCRJ".into() },
+                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
+                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
             ]),
         };
 

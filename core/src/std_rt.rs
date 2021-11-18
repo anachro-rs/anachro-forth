@@ -55,11 +55,11 @@ where
 }
 
 #[derive(Clone)]
-pub struct Toker {
+pub struct BuiltinToken {
     bi: Builtin,
 }
 
-impl Toker {
+impl BuiltinToken {
     pub fn new(bi: Builtin) -> Self {
         Self { bi }
     }
@@ -70,28 +70,34 @@ impl Toker {
 }
 
 pub type StdRuntime = Runtime<
-    Toker,
+    BuiltinToken,
     StdFuncSeq,
     StdVecStack<i32>,
-    StdVecStack<RuntimeSeqCtx<Toker, StdFuncSeq>>,
+    StdVecStack<RuntimeSeqCtx<BuiltinToken, StdFuncSeq>>,
     String,
 >;
 
 #[derive(Clone)]
-pub struct StdFuncSeq {
-    pub inner: Arc<Vec<RuntimeWord<Toker, StdFuncSeq>>>,
+pub struct Hax {
+    pub name: String,
+    pub word: RuntimeWord<BuiltinToken, StdFuncSeq>
 }
 
-impl FuncSeq<Toker, Self> for StdFuncSeq {
-    fn get(&self, idx: usize) -> Option<RuntimeWord<Toker, Self>> {
+#[derive(Clone)]
+pub struct StdFuncSeq {
+    pub inner: Arc<Vec<Hax>>,
+}
+
+impl FuncSeq<BuiltinToken, Self> for StdFuncSeq {
+    fn get(&self, idx: usize) -> Option<RuntimeWord<BuiltinToken, Self>> {
         match self.inner.get(idx) {
-            Some(artw) => Some(artw.clone()),
+            Some(artw) => Some(artw.word.clone()),
             None => None,
         }
     }
 }
 
-pub type StdRuntimeWord = RuntimeWord<Toker, StdFuncSeq>;
+pub type StdRuntimeWord = RuntimeWord<BuiltinToken, StdFuncSeq>;
 
 type Builtin = fn(&mut StdRuntime) -> Result<(), Error>;
 
