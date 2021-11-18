@@ -49,89 +49,44 @@ impl From<core::fmt::Error> for Error {
     }
 }
 
-// #[derive(Clone)]
-// pub enum RefWord<'dict, Sdata, Sexec, Dict>
-// where
-//     Sdata: Stack<Item = i32> + 'dict,
-//     Sexec: ExecStack<'dict, Sdata, Dict> + 'dict,
-//     Dict: RoDict<'dict, Sdata, Sexec>,
-// {
-//     LiteralVal(i32),
-//     Builtin {
-//         name: &'dict str,
-//         func: fn(&mut Runtime<Sdata, Sexec, Dict>) -> Result<(), Error>,
-//     },
-//     Compiled {
-//         name: &'dict str,
-//         data: &'dict [RefWord<'dict, Sdata, Sexec, Dict>],
-//     },
-//     UncondRelativeJump { offset: i32 },
-//     CondRelativeJump { offset: i32, jump_on: bool },
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct FuncTok;
-
-// #[derive(Debug, Clone)]
-// pub struct FuncSeq;
-
 pub trait FuncSeq<T, F>
 where
     F: FuncSeq<T, F>,
     T: Clone,
     F: Clone,
 {
-    fn get(&self, _idx: usize) -> Option<RefWord2<T, F>>;
+    fn get(&self, _idx: usize) -> Option<RuntimeWord<T, F>>;
 }
 
 #[derive(Debug, Clone)]
-pub enum RefWord2<T, F>
+pub enum RuntimeWord<T, F>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     LiteralVal(i32),
 
-    // TODO: These three are the same, and should all be reference
-    // to some "owned" token, maybe GhostToken
-    //
-    // The stepper should return one of these tokens back to the
-    // Runtime to be called against the current state. This will
-    // "smuggle" the types of the actual runtime away from the
-    // words themselves
-    //
-    // TODO: How to handle Sequences (Vec<FuncTok>, idx) and individuals (FuncTok)
+    // TODO: Blend these somehow?
     Verb(T),
-
     VerbSeq(F),
 
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-pub struct RefExecCtx2<T, F>
+pub struct RuntimeSeqCtx<T, F>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
     pub idx: usize,
-    pub word: RefWord2<T, F>,
+    pub word: RuntimeWord<T, F>,
 }
-
-// pub struct RefExecCtx<'dict, Sdata, Sexec, Dict>
-// where
-//     Sdata: Stack<Item = i32> + 'dict,
-//     Sexec: ExecStack<'dict, Sdata, Dict> + 'dict,
-//     Dict: RoDict<'dict, Sdata, Sexec>
-// {
-//     pub idx: usize,
-//     pub word: RefWord<'dict, Sdata, Sexec, Dict>,
-// }
 
 pub struct Runtime<T, F, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecStack2<T, F>,
+    Sexec: ExecutionStack<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
     O: Write,
@@ -146,7 +101,7 @@ where
 impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecStack2<T, F>,
+    Sexec: ExecutionStack<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
     O: Write,
@@ -164,12 +119,6 @@ where
     }
 
     fn step_inner(&mut self) -> Result<StepResult<T>, Error> {
-        // AJM(TODO):
-        // Okay, I *think* I need to turn this into a loop, that always sequences forwards until
-        // until the next "syscall"/FuncTok is available.
-        //
-        // It'll go *something* like looping, but only return in cases where we have a FuncTok
-
         let ret = 'oloop: loop {
             // TODO: I should set a limit to the max number of loop
             // iterations that are made here! Or maybe go back to
@@ -187,20 +136,20 @@ where
                 T: Clone,
             {
                 Single(T),
-                Ref(RefWord2<T, F>),
+                Ref(RuntimeWord<T, F>),
             }
 
             let to_push = match cur.word.clone() {
-                RefWord2::LiteralVal(lit) => {
+                RuntimeWord::LiteralVal(lit) => {
                     // println!("lit");
                     self.data_stk.push(lit);
                     None
                 }
-                RefWord2::Verb(ft) => {
+                RuntimeWord::Verb(ft) => {
                     // println!("verb");
                     Some(WhichToken::Single(ft))
                 }
-                RefWord2::VerbSeq(seq) => {
+                RuntimeWord::VerbSeq(seq) => {
                     // println!("verbseq->{}", cur.idx);
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),
@@ -219,12 +168,12 @@ where
                 //     cur.idx += 1;
                 //     ret
                 // }
-                RefWord2::UncondRelativeJump { offset } => {
+                RuntimeWord::UncondRelativeJump { offset } => {
                     // println!("ucrj");
                     jump = Some(offset);
                     None
                 }
-                RefWord2::CondRelativeJump { offset, jump_on } => {
+                RuntimeWord::CondRelativeJump { offset, jump_on } => {
                     // println!("crj");
                     let topvar = self.data_stk.pop()?;
 
@@ -257,7 +206,7 @@ where
                 }
                 Some(WhichToken::Ref(rf)) => {
                     // println!("FLOWPUSH");
-                    self.flow_stk.push(RefExecCtx2 { idx: 0, word: rf });
+                    self.flow_stk.push(RuntimeSeqCtx { idx: 0, word: rf });
                 }
                 None => {
                     // println!("FLOWPOP");
@@ -288,15 +237,15 @@ where
         Ok(StepResult::Working(ret))
     }
 
-    pub fn push_exec(&mut self, word: RefWord2<T, F>) {
-        self.flow_stk.push(RefExecCtx2 { idx: 0, word });
+    pub fn push_exec(&mut self, word: RuntimeWord<T, F>) {
+        self.flow_stk.push(RuntimeSeqCtx { idx: 0, word });
     }
 }
 
 impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecStack2<T, F>,
+    Sexec: ExecutionStack<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
     O: Write + Default,
@@ -313,52 +262,23 @@ pub trait Stack {
 
     fn push(&mut self, data: Self::Item);
     fn pop(&mut self) -> Result<Self::Item, Error>;
-    fn last(&self) -> Result<&Self::Item, Error>;
-    fn len(&self) -> usize;
-    fn last_mut(&mut self) -> Result<&mut Self::Item, Error>;
+    // fn last(&self) -> Result<&Self::Item, Error>;
+    // fn len(&self) -> usize;
+    // fn last_mut(&mut self) -> Result<&mut Self::Item, Error>;
 
-    // TODO: This is suspicious...
-    fn get_mut(&mut self, index: usize) -> Result<&mut Self::Item, Error>;
+    // // TODO: This is suspicious...
+    // fn get_mut(&mut self, index: usize) -> Result<&mut Self::Item, Error>;
 }
 
-pub trait ExecStack2<T, F>
+pub trait ExecutionStack<T, F>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RefExecCtx2<T, F>);
-    fn pop(&mut self) -> Result<RefExecCtx2<T, F>, Error>;
-    fn last(&self) -> Result<&RefExecCtx2<T, F>, Error>;
-    fn last_mut(&mut self) -> Result<&mut RefExecCtx2<T, F>, Error>;
-    fn len(&self) -> usize;
-
-    // TODO: This is suspicious...
-    fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx2<T, F>, Error>;
+    fn push(&mut self, data: RuntimeSeqCtx<T, F>);
+    fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error>;
+    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error>;
 }
-
-// pub trait ExecStack<'dict, Sdata, Dict>: Sized
-// where
-//     Sdata: Stack<Item = i32> + 'dict,
-//     Dict: RoDict<'dict, Sdata, Self>,
-//     Self: 'dict,
-// {
-//     fn push(&mut self, data: RefExecCtx<'dict, Sdata, Self, Dict>);
-//     fn pop(&mut self) -> Result<RefExecCtx<'dict, Sdata, Self, Dict>, Error>;
-//     fn last(&self) -> Result<&RefExecCtx<'dict, Sdata, Self, Dict>, Error>;
-//     fn last_mut(&mut self) -> Result<&mut RefExecCtx<'dict, Sdata, Self, Dict>, Error>;
-//     fn len(&self) -> usize;
-
-//     // TODO: This is suspicious...
-//     fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx<'dict, Sdata, Self, Dict>, Error>;
-// }
-
-// pub trait RoDict<'dict, Sdata, Sexec>: Sized + 'dict
-// where
-//     Sdata: Stack<Item = i32> + 'dict,
-//     Sexec: ExecStack<'dict, Sdata, Self> + 'dict,
-// {
-//     fn get<'a>(&self, name: &'a str) -> Option<&'dict RefWord<'dict, Sdata, Sexec, Self>>;
-// }
 
 pub enum StepResult<T> {
     Done,
@@ -396,57 +316,46 @@ mod test {
             self.data.pop().ok_or(Error::DataStackUnderflow)
         }
 
-        fn last(&self) -> Result<&T, Error> {
-            self.data.last().ok_or(self.err.clone())
-        }
+        // fn last(&self) -> Result<&T, Error> {
+        //     self.data.last().ok_or(self.err.clone())
+        // }
 
-        fn last_mut(&mut self) -> Result<&mut T, Error> {
-            self.data.last_mut().ok_or(self.err.clone())
-        }
+        // fn last_mut(&mut self) -> Result<&mut T, Error> {
+        //     self.data.last_mut().ok_or(self.err.clone())
+        // }
 
-        fn get_mut(&mut self, index: usize) -> Result<&mut T, Error> {
-            self.data.get_mut(index).ok_or(self.err.clone())
-        }
+        // fn get_mut(&mut self, index: usize) -> Result<&mut T, Error> {
+        //     self.data.get_mut(index).ok_or(self.err.clone())
+        // }
 
-        fn len(&self) -> usize {
-            self.data.len()
-        }
+        // fn len(&self) -> usize {
+        //     self.data.len()
+        // }
     }
 
-    impl<T, F> ExecStack2<T, F> for StdVecStack<RefExecCtx2<T, F>>
+    impl<T, F> ExecutionStack<T, F> for StdVecStack<RuntimeSeqCtx<T, F>>
     where
         F: FuncSeq<T, F> + Clone,
         T: Clone,
     {
-        fn push(&mut self, data: RefExecCtx2<T, F>) {
+        fn push(&mut self, data: RuntimeSeqCtx<T, F>) {
             self.data.push(data)
         }
-        fn pop(&mut self) -> Result<RefExecCtx2<T, F>, Error> {
+        fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error> {
             self.data.pop().ok_or(Error::FlowStackEmpty)
         }
-        fn last(&self) -> Result<&RefExecCtx2<T, F>, Error> {
-            self.data.last().ok_or(Error::FlowStackEmpty)
-        }
-        fn last_mut(&mut self) -> Result<&mut RefExecCtx2<T, F>, Error> {
+        fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error> {
             self.data.last_mut().ok_or(Error::FlowStackEmpty)
-        }
-        fn len(&self) -> usize {
-            self.data.len()
-        }
-
-        // TODO: This is suspicious...
-        fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx2<T, F>, Error> {
-            self.data.get_mut(index).ok_or(Error::FlowStackEmpty)
         }
     }
 
     #[derive(Clone)]
     struct SeqTok<'a> {
-        inner: &'a [RefWord2<Toker<'a>, SeqTok<'a>>],
+        inner: &'a [RuntimeWord<Toker<'a>, SeqTok<'a>>],
     }
 
     impl<'a> FuncSeq<Toker<'a>, SeqTok<'a>> for SeqTok<'a> {
-        fn get(&self, idx: usize) -> Option<RefWord2<Toker<'a>, SeqTok<'a>>> {
+        fn get(&self, idx: usize) -> Option<RuntimeWord<Toker<'a>, SeqTok<'a>>> {
             self.inner.get(idx).map(Clone::clone)
         }
     }
@@ -461,7 +370,7 @@ mod test {
             Toker<'a>,
             SeqTok<'a>,
             StdVecStack<i32>,
-            StdVecStack<RefExecCtx2<Toker<'a>, SeqTok<'a>>>,
+            StdVecStack<RuntimeSeqCtx<Toker<'a>, SeqTok<'a>>>,
             String,
         >,
     ) -> Result<(), Error>;
@@ -488,8 +397,8 @@ mod test {
         // Manually craft a word, roughly:
         // : star 42 emit ;
         let pre_seq = [
-            RefWord2::LiteralVal(42),
-            RefWord2::Verb(Toker {
+            RuntimeWord::LiteralVal(42),
+            RuntimeWord::Verb(Toker {
                 bi: builtins::bi_emit,
             }),
         ];
@@ -497,14 +406,14 @@ mod test {
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
         let seq = [
-            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
-            RefWord2::LiteralVal(-1),
-            RefWord2::CondRelativeJump {
+            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
+            RuntimeWord::LiteralVal(-1),
+            RuntimeWord::CondRelativeJump {
                 offset: 2,
                 jump_on: false,
             },
-            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
-            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
+            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
+            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
         ];
 
         // In the future, these words will be obtained from deserialized output,
@@ -513,7 +422,7 @@ mod test {
 
         // Push `mstar` into the execution context, basically
         // treating it as an "entry point"
-        x.push_exec(RefWord2::VerbSeq(SeqTok { inner: &seq }));
+        x.push_exec(RuntimeWord::VerbSeq(SeqTok { inner: &seq }));
 
         loop {
             match x.step() {

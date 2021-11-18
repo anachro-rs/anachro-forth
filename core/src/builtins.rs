@@ -6,7 +6,7 @@ pub fn bi_emit<T, F, Sdata, Sexec, O>(
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecStack2<T, F>,
+    Sexec: ExecutionStack<T, F>,
     F: FuncSeq<T, F> + Clone,
     T: Clone,
     O: Write,

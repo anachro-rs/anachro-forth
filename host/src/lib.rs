@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use anachro_forth_core as afc;
 
-use afc::{Error, Stack, StepResult, ExecStack, RefExecCtx, RefWord, Runtime};
+use afc::{Error, Stack, StepResult, ExecStack, RuntimeSeqCtx, RefWord, Runtime};
 
 pub mod builtins;
 
@@ -141,8 +141,8 @@ struct FlowBoi<'a> {
     dict: &'a mut Dict,
 }
 
-impl<'a> From<RefExecCtx<'a, StdVecStack<i32>, FlowBoi<'a>>> for ExecCtx<StdVecStack<i32>, FlowBoi<'a>> {
-    fn from(other: RefExecCtx<'a, StdVecStack<i32>, FlowBoi<'a>>) -> ExecCtx {
+impl<'a> From<RuntimeSeqCtx<'a, StdVecStack<i32>, FlowBoi<'a>>> for ExecCtx<StdVecStack<i32>, FlowBoi<'a>> {
+    fn from(other: RuntimeSeqCtx<'a, StdVecStack<i32>, FlowBoi<'a>>) -> ExecCtx {
         ExecCtx {
             idx: other.idx,
             word: Arc::new(match other.word {
@@ -159,28 +159,28 @@ impl<'a> From<RefExecCtx<'a, StdVecStack<i32>, FlowBoi<'a>>> for ExecCtx<StdVecS
 }
 
 impl<'a> ExecStack<'a, StdVecStack<i32>> for FlowBoi<'a> {
-    fn push(&mut self, data: RefExecCtx<'a, StdVecStack<i32>, Self>) {
+    fn push(&mut self, data: RuntimeSeqCtx<'a, StdVecStack<i32>, Self>) {
         self.flow_stk.data.push(data.into());
     }
 
-    fn pop(&mut self) -> Result<RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+    fn pop(&mut self) -> Result<RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
         // self.data.pop().ok_or(Error::DataStackUnderflow).map(|d| {
         //     todo!()
         // })
         todo!()
     }
 
-    fn last(&self) -> Result<&RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+    fn last(&self) -> Result<&RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
         // self.data.last().ok_or(self.err.clone()).map(|d| todo!())
         todo!()
     }
 
-    fn last_mut(&mut self) -> Result<&mut RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
         // self.data.last_mut().ok_or(self.err.clone()).map(|d| todo!())
         todo!()
     }
 
-    fn get_mut(&mut self, index: usize) -> Result<&mut RefExecCtx<'a, StdVecStack<i32>, Self>, Error> {
+    fn get_mut(&mut self, index: usize) -> Result<&mut RuntimeSeqCtx<'a, StdVecStack<i32>, Self>, Error> {
         // self.data.get_mut(index).ok_or(self.err.clone()).map(|d| todo!())
         todo!()
     }
