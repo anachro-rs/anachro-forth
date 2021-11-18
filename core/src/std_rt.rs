@@ -1,10 +1,11 @@
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use crate::Runtime;
-use crate::RuntimeWord;
-use crate::RuntimeSeqCtx;
 use crate::FuncSeq;
-use crate::{Error, Stack, ExecutionStack};
+use crate::Runtime;
+use crate::RuntimeSeqCtx;
+use crate::RuntimeWord;
+use crate::{Error, ExecutionStack, Stack};
 
 #[derive(Debug)]
 pub struct StdVecStack<T> {
@@ -60,16 +61,13 @@ pub struct Toker {
 
 impl Toker {
     pub fn new(bi: Builtin) -> Self {
-        Self {
-            bi
-        }
+        Self { bi }
     }
 
     pub fn exec(&self, rt: &mut StdRuntime) -> Result<(), Error> {
         (self.bi)(rt)
     }
 }
-
 
 pub type StdRuntime = Runtime<
     Toker,
@@ -81,12 +79,10 @@ pub type StdRuntime = Runtime<
 
 #[derive(Clone)]
 pub struct StdFuncSeq {
-    pub inner: Vec<RuntimeWord<Toker, StdFuncSeq>>,
+    pub inner: Arc<Vec<RuntimeWord<Toker, StdFuncSeq>>>,
 }
 
-impl FuncSeq<Toker, Self> for StdFuncSeq
-where
-{
+impl FuncSeq<Toker, Self> for StdFuncSeq {
     fn get(&self, idx: usize) -> Option<RuntimeWord<Toker, Self>> {
         match self.inner.get(idx) {
             Some(artw) => Some(artw.clone()),
@@ -95,14 +91,9 @@ where
     }
 }
 
-pub type StdRuntimeWord = RuntimeWord<
-    Toker,
-    StdFuncSeq,
->;
+pub type StdRuntimeWord = RuntimeWord<Toker, StdFuncSeq>;
 
-type Builtin = fn(
-    &mut StdRuntime,
-) -> Result<(), Error>;
+type Builtin = fn(&mut StdRuntime) -> Result<(), Error>;
 
 pub fn new_runtime() -> StdRuntime {
     // These are the only data structures required, and Runtime is generic over the

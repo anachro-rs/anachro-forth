@@ -162,15 +162,6 @@ where
                     cur.idx += 1;
                     ret
                 }
-                // RefWord2::Builtin { func, .. } => {
-                //     func(self)?;
-                //     None
-                // }
-                // RefWord2::Compiled { data: words, .. } => {
-                //     let ret = words.get(cur.idx).map(|t| { t.boop() });
-                //     cur.idx += 1;
-                //     ret
-                // }
                 RuntimeWord::UncondRelativeJump { offset } => {
                     // println!("ucrj");
                     jump = Some(offset);
@@ -289,6 +280,7 @@ pub enum StepResult<T> {
 mod test {
     use super::*;
     use crate::std_rt::*;
+    use std::sync::Arc;
 
     #[test]
     fn foo() {
@@ -296,23 +288,27 @@ mod test {
 
         // Manually craft a word, roughly:
         // : star 42 emit ;
-        let pre_seq = [
-            RuntimeWord::LiteralVal(42),
-            RuntimeWord::Verb(Toker::new(builtins::bi_emit)),
-        ];
+        let pre_seq = StdFuncSeq {
+            inner: Arc::new(vec![
+                RuntimeWord::LiteralVal(42),
+                RuntimeWord::Verb(Toker::new(builtins::bi_emit)),
+            ]),
+        };
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
-        let seq = [
-            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
-            RuntimeWord::LiteralVal(-1),
-            RuntimeWord::CondRelativeJump {
-                offset: 2,
-                jump_on: false,
-            },
-            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
-            RuntimeWord::VerbSeq(SeqTok { inner: &pre_seq }),
-        ];
+        let seq = StdFuncSeq {
+            inner: Arc::new(vec![
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::LiteralVal(-1),
+                RuntimeWord::CondRelativeJump {
+                    offset: 2,
+                    jump_on: false,
+                },
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+            ]),
+        };
 
         // In the future, these words will be obtained from deserialized output,
         // rather than being crafted manually. I'll probably need GhostCell for
@@ -320,7 +316,7 @@ mod test {
 
         // Push `mstar` into the execution context, basically
         // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(SeqTok { inner: &seq }));
+        x.push_exec(RuntimeWord::VerbSeq(seq));
 
         loop {
             match x.step() {

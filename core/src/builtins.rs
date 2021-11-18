@@ -16,10 +16,7 @@ where
     write!(&mut ctxt.cur_output, "{}", symbol).map_err(|_| Error::OutputFormat)
 }
 
-
-pub fn bi_pop<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_pop<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -31,9 +28,7 @@ where
     Ok(())
 }
 
-pub fn bi_cr<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_cr<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -45,9 +40,7 @@ where
     Ok(())
 }
 
-pub fn bi_lt<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_lt<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -61,9 +54,7 @@ where
     Ok(())
 }
 
-pub fn bi_gt<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_gt<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -107,9 +98,7 @@ where
     Ok(())
 }
 
-pub fn bi_eq<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_eq<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -123,9 +112,7 @@ where
     Ok(())
 }
 
-pub fn bi_add<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_add<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
@@ -139,9 +126,7 @@ where
     Ok(())
 }
 
-pub fn bi_dup<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
-) -> Result<(), Error>
+pub fn bi_dup<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<T, F>,
