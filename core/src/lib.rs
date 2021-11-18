@@ -84,8 +84,6 @@ where
     fn get(&self, _idx: usize) -> Option<RefWord2<T, F>>;
 }
 
-
-
 #[derive(Debug, Clone)]
 pub enum RefWord2<T, F>
 where
@@ -256,7 +254,7 @@ where
                     // println!("BREAK");
                     self.flow_stk.pop()?;
                     break 'oloop ft;
-                },
+                }
                 Some(WhichToken::Ref(rf)) => {
                     // println!("FLOWPUSH");
                     self.flow_stk.push(RefExecCtx2 { idx: 0, word: rf });
@@ -264,7 +262,7 @@ where
                 None => {
                     // println!("FLOWPOP");
                     self.flow_stk.pop()?;
-                },
+                }
             }
 
             if let Some(jump) = jump {
@@ -286,7 +284,6 @@ where
                 }
             }
         };
-
 
         Ok(StepResult::Working(ret))
     }
@@ -370,8 +367,8 @@ pub enum StepResult<T> {
 
 #[cfg(test)]
 mod test {
-    use core::marker::PhantomData;
     use super::*;
+    use core::marker::PhantomData;
 
     #[derive(Debug)]
     pub struct StdVecStack<T> {
@@ -464,11 +461,9 @@ mod test {
             Toker<'a>,
             SeqTok<'a>,
             StdVecStack<i32>,
-            StdVecStack<
-                RefExecCtx2<Toker<'a>, SeqTok<'a>>
-            >,
+            StdVecStack<RefExecCtx2<Toker<'a>, SeqTok<'a>>>,
             String,
-        >
+        >,
     ) -> Result<(), Error>;
 
     #[test]
@@ -494,23 +489,22 @@ mod test {
         // : star 42 emit ;
         let pre_seq = [
             RefWord2::LiteralVal(42),
-            RefWord2::Verb(Toker { bi: builtins::bi_emit }),
+            RefWord2::Verb(Toker {
+                bi: builtins::bi_emit,
+            }),
         ];
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
         let seq = [
-            RefWord2::VerbSeq(SeqTok {
-                inner: &pre_seq,
-            }),
+            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
             RefWord2::LiteralVal(-1),
-            RefWord2::CondRelativeJump { offset: 2, jump_on: false },
-            RefWord2::VerbSeq(SeqTok {
-                inner: &pre_seq,
-            }),
-            RefWord2::VerbSeq(SeqTok {
-                inner: &pre_seq,
-            }),
+            RefWord2::CondRelativeJump {
+                offset: 2,
+                jump_on: false,
+            },
+            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
+            RefWord2::VerbSeq(SeqTok { inner: &pre_seq }),
         ];
 
         // In the future, these words will be obtained from deserialized output,
@@ -519,9 +513,7 @@ mod test {
 
         // Push `mstar` into the execution context, basically
         // treating it as an "entry point"
-        x.push_exec(RefWord2::VerbSeq(SeqTok {
-            inner: &seq,
-        }));
+        x.push_exec(RefWord2::VerbSeq(SeqTok { inner: &seq }));
 
         loop {
             match x.step() {
