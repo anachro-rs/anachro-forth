@@ -1,4 +1,5 @@
-use anachro_forth_host::{builtins::BUILT_IN_WORDS, evaluate, Context, StepResult};
+use anachro_forth_host::{evaluate, Context};
+use anachro_forth_core::{std_rt::std_builtins, StepResult};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output
@@ -65,10 +66,10 @@ const MULTI_LINE_CASES: &[(&str, &str)] = &[
     // (
     //     r#"
     //         : star 42 emit ;
-    //         : test 10 0 do 10 0 do star loop loop ;
+    //         : test 3 0 do 4 0 do star loop loop ;
     //         test
     //     "#,
-    //     "************",
+    //     "**************",
     // ),
 ];
 
@@ -76,38 +77,44 @@ const MULTI_LINE_CASES: &[(&str, &str)] = &[
 #[test]
 fn single_lines() {
     for (cases, output) in SINGLE_LINE_CASES {
-        let mut ctxt = Context::with_builtins(BUILT_IN_WORDS);
+        let mut ctxt = Context::with_builtins(std_builtins());
         println!("{:?} => {:?}", cases, output);
         evaluate(&mut ctxt, s(cases)).unwrap();
-        while let StepResult::Working = ctxt.step().unwrap() {
-            // ...
+        loop {
+            match ctxt.step().unwrap() {
+                StepResult::Done => break,
+                StepResult::Working(fs) => fs.exec(&mut ctxt.rt).unwrap(),
+            }
         }
-        assert_eq!(output, &ctxt.output(),);
+        assert_eq!(output, &ctxt.output());
 
-        assert_eq!(0, ctxt.data_stack().len());
-        assert_eq!(0, ctxt.return_stack().len());
-        assert_eq!(0, ctxt.flow_stack().len());
+        assert_eq!(0, ctxt.rt.data_stk.data().len());
+        assert_eq!(0, ctxt.rt.ret_stk.data().len());
+        assert_eq!(0, ctxt.rt.flow_stk.data().len());
     }
 }
 
 #[test]
 fn multi_lines() {
     for (cases, output) in MULTI_LINE_CASES {
-        let mut ctxt = Context::with_builtins(BUILT_IN_WORDS);
+        let mut ctxt = Context::with_builtins(std_builtins());
 
         for cline in cases.lines().map(str::trim) {
             println!("{:?}", cline);
             evaluate(&mut ctxt, s(cline)).unwrap();
-            while let StepResult::Working = ctxt.step().unwrap() {
-                // ...
+            loop {
+                match ctxt.step().unwrap() {
+                    StepResult::Done => break,
+                    StepResult::Working(fs) => fs.exec(&mut ctxt.rt).unwrap(),
+                }
             }
         }
 
-        assert_eq!(output, &ctxt.output(),);
+        assert_eq!(output, &ctxt.output());
 
-        assert_eq!(0, ctxt.data_stack().len());
-        assert_eq!(0, ctxt.return_stack().len());
-        assert_eq!(0, ctxt.flow_stack().len());
+        assert_eq!(0, ctxt.rt.data_stk.data().len());
+        assert_eq!(0, ctxt.rt.ret_stk.data().len());
+        assert_eq!(0, ctxt.rt.flow_stk.data().len());
     }
 }
 

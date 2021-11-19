@@ -22,6 +22,12 @@ impl<T> StdVecStack<T> {
     }
 }
 
+impl<T> StdVecStack<T> {
+    pub fn data(&self) -> &[T] {
+        &self.data
+    }
+}
+
 impl<T> Stack for StdVecStack<T> {
     type Item = T;
 
