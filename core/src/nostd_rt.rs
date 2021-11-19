@@ -142,7 +142,7 @@ pub fn new_runtime<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_
 pub fn std_builtins<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>(
 ) -> &'static [(
     &'static str,
-    fn(&mut NoStdRuntime<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>,
+    fn(&mut NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>,
 )] {
     &[
         ("emit", crate::builtins::bi_emit),
