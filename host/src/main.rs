@@ -26,11 +26,11 @@ fn main() -> Result<(), Error> {
                 }
             }
         };
-        // let ser = ctxt.serialize();
-        // println!("{:?}", ser);
-        // let pcser = postcard::to_stdvec(&ser).unwrap();
-        // println!("{:02X?}", pcser);
-        // println!("{}", pcser.len());
+        let ser = ctxt.serialize();
+        println!("{:?}", ser);
+        let pcser = postcard::to_stdvec(&ser).unwrap();
+        println!("{:02X?}", pcser);
+        println!("{}", pcser.len());
         print(&mut ctxt, is_ok);
     }
 }

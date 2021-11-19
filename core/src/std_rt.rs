@@ -78,14 +78,14 @@ pub type StdRuntime = Runtime<
 >;
 
 #[derive(Clone)]
-pub struct Hax {
+pub struct NamedStdRuntimeWord {
     pub name: String,
-    pub word: RuntimeWord<BuiltinToken, StdFuncSeq>
+    pub word: RuntimeWord<BuiltinToken, StdFuncSeq>,
 }
 
 #[derive(Clone)]
 pub struct StdFuncSeq {
-    pub inner: Arc<Vec<Hax>>,
+    pub inner: Arc<Vec<NamedStdRuntimeWord>>,
 }
 
 impl FuncSeq<BuiltinToken, Self> for StdFuncSeq {

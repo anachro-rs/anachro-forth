@@ -7,6 +7,8 @@ pub mod builtins;
 #[cfg(any(test, feature = "std"))]
 pub mod std_rt;
 
+pub mod nostd_rt;
+
 #[derive(Debug, Clone)]
 pub enum Error {
     /// Failed to write to the "stdout" style output
@@ -277,7 +279,7 @@ pub enum StepResult<T> {
 }
 
 #[cfg(test)]
-mod test {
+mod std_test {
     use super::*;
     use crate::std_rt::*;
     use std::sync::Arc;
@@ -290,14 +292,14 @@ mod test {
         // : star 42 emit ;
         let pre_seq = StdFuncSeq {
             inner: Arc::new(vec![
-                Hax {
+                NamedStdRuntimeWord {
                     word: RuntimeWord::LiteralVal(42),
                     name: "42".into(),
                 },
-                Hax {
+                NamedStdRuntimeWord {
                     word: RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
                     name: "emit".into(),
-                }
+                },
             ]),
         };
 
@@ -305,16 +307,99 @@ mod test {
         // : mstar star -1 if star star then ;
         let seq = StdFuncSeq {
             inner: Arc::new(vec![
-                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
-                Hax { word: RuntimeWord::LiteralVal(-1), name: "-1".into() },
-                Hax { word: RuntimeWord::CondRelativeJump {
-                    offset: 2,
-                    jump_on: false,
-                }, name: "UCRJ".into() },
-                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
-                Hax { word: RuntimeWord::VerbSeq(pre_seq.clone()), name: "star".into() },
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    name: "star".into(),
+                },
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::LiteralVal(-1),
+                    name: "-1".into(),
+                },
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::CondRelativeJump {
+                        offset: 2,
+                        jump_on: false,
+                    },
+                    name: "UCRJ".into(),
+                },
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    name: "star".into(),
+                },
+                NamedStdRuntimeWord {
+                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    name: "star".into(),
+                },
             ]),
         };
+
+        // In the future, these words will be obtained from deserialized output,
+        // rather than being crafted manually. I'll probably need GhostCell for
+        // the self-referential parts
+
+        // Push `mstar` into the execution context, basically
+        // treating it as an "entry point"
+        x.push_exec(RuntimeWord::VerbSeq(seq));
+
+        loop {
+            match x.step() {
+                Ok(StepResult::Done) => break,
+                Ok(StepResult::Working(ft)) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    ft.exec(&mut x).unwrap();
+                }
+                Err(_e) => todo!(),
+            }
+        }
+
+        let output = x.exchange_output();
+
+        assert_eq!("***", &output);
+    }
+}
+
+
+#[cfg(test)]
+mod nostd_test {
+    use super::*;
+    use crate::nostd_rt::*;
+
+    #[test]
+    fn foo() {
+
+        // Manually craft a word, roughly:
+        // : star 42 emit ;
+        let pre_seq = NoStdFuncSeq {
+            inner: &[
+                RuntimeWord::LiteralVal(42),
+                RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
+            ],
+        };
+
+        // Manually craft another word, roughly:
+        // : mstar star -1 if star star then ;
+        let seq = NoStdFuncSeq {
+            inner: &[
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::LiteralVal(-1),
+                RuntimeWord::CondRelativeJump {
+                    offset: 2,
+                    jump_on: false,
+                },
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::VerbSeq(pre_seq.clone()),
+            ],
+        };
+
+        let mut x = new_runtime::<32, 16, 256>();
+
+        // let sz = core::mem::size_of::<RuntimeWord<BuiltinToken<1, 1, 1>, NoStdFuncSeq<1, 1, 1>>>();
+        // // <1,   1,  1> -> 112
+        // // <16,  1,  1> -> 224
+        // // <1,  32,  1> -> 1104
+        // assert_eq!(856, sz);
 
         // In the future, these words will be obtained from deserialized output,
         // rather than being crafted manually. I'll probably need GhostCell for

@@ -14,6 +14,9 @@ dependencies = [
 [[package]]
 name = "anachro-forth-core"
 version = "0.1.0"
+dependencies = [
+ "heapless",
+]
 
 [[package]]
 name = "anachro-forth-host"
