@@ -2,7 +2,6 @@ use core::marker::PhantomData;
 
 use crate::FuncSeq;
 use crate::Runtime;
-use crate::RuntimeSeqCtx;
 use crate::RuntimeWord;
 use crate::{Error, ExecutionStack, Stack};
 
@@ -39,19 +38,19 @@ impl<T, const N: usize> Stack for HVecStack<T, N> {
     }
 }
 
-impl<T, F, const N: usize> ExecutionStack<T, F> for HVecStack<RuntimeSeqCtx<T, F>, N>
+impl<T, F, const N: usize> ExecutionStack<T, F> for HVecStack<RuntimeWord<T, F>, N>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RuntimeSeqCtx<T, F>) {
+    fn push(&mut self, data: RuntimeWord<T, F>) {
         // TODO
         self.data.push(data).map_err(drop).unwrap()
     }
-    fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error> {
+    fn pop(&mut self) -> Result<RuntimeWord<T, F>, Error> {
         self.data.pop().ok_or(Error::FlowStackEmpty)
     }
-    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error> {
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error> {
         self.data.last_mut().ok_or(Error::FlowStackEmpty)
     }
 }
@@ -82,7 +81,7 @@ pub type NoStdRuntime<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTB
         NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
         HVecStack<i32, DATA_SZ>,
         HVecStack<
-            RuntimeSeqCtx<
+            RuntimeWord<
                 BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
                 NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
             >,

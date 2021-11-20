@@ -8,6 +8,7 @@ pub mod builtins;
 pub mod std_rt;
 
 pub mod nostd_rt;
+pub mod tokendict;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -64,6 +65,31 @@ where
 }
 
 #[derive(Debug, Clone)]
+pub struct VerbSeqInner<T, F>
+where
+    F: FuncSeq<T, F> + Clone,
+    T: Clone,
+{
+    word: F,
+    idx: usize,
+    _pd_t_ty: PhantomData<T>,
+}
+
+impl<T, F> VerbSeqInner<T, F>
+where
+    F: FuncSeq<T, F> + Clone,
+    T: Clone,
+{
+    pub fn from_word(word: &F) -> Self {
+        Self {
+            word: word.clone(),
+            idx: 0,
+            _pd_t_ty: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum RuntimeWord<T, F>
 where
     F: FuncSeq<T, F> + Clone,
@@ -73,19 +99,23 @@ where
 
     // TODO: Blend these somehow?
     Verb(T),
-    VerbSeq(F),
+    VerbSeq(VerbSeqInner<T, F>),
 
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-pub struct RuntimeSeqCtx<T, F>
+impl<T, F> RuntimeWord<T,F>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
-    pub idx: usize,
-    pub word: RuntimeWord<T, F>,
+    pub fn as_seq_inner(&mut self) -> Result<&mut VerbSeqInner<T, F>, Error> {
+        match self {
+            RuntimeWord::VerbSeq(ref mut seq) => Ok(seq),
+            _ => Err(Error::InternalError),
+        }
+    }
 }
 
 pub struct Runtime<T, F, Sdata, Sexec, O>
@@ -144,29 +174,29 @@ where
                 Ref(RuntimeWord<T, F>),
             }
 
-            let to_push = match cur.word.clone() {
+            let to_push = match cur {
                 RuntimeWord::LiteralVal(lit) => {
                     // println!("lit");
-                    self.data_stk.push(lit);
+                    self.data_stk.push(*lit);
                     None
                 }
                 RuntimeWord::Verb(ft) => {
                     // println!("verb");
-                    Some(WhichToken::Single(ft))
+                    Some(WhichToken::Single(ft.clone()))
                 }
-                RuntimeWord::VerbSeq(seq) => {
+                RuntimeWord::VerbSeq(ref mut seq) => {
                     // println!("verbseq->{}", cur.idx);
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),
                     // and overshooting (probably an engine error)
-                    let ret = seq.get(cur.idx).map(WhichToken::Ref);
+                    let ret = seq.word.get(seq.idx).map(WhichToken::Ref);
                     // println!("\tgot? {}", ret.is_some());
-                    cur.idx += 1;
+                    seq.idx += 1;
                     ret
                 }
                 RuntimeWord::UncondRelativeJump { offset } => {
                     // println!("ucrj");
-                    jump = Some(offset);
+                    jump = Some(*offset);
                     None
                 }
                 RuntimeWord::CondRelativeJump { offset, jump_on } => {
@@ -180,13 +210,13 @@ where
                     // true    | false   | yes
                     // false   | true    | yes
                     // true    | true    | no
-                    let do_jump = (topvar == 0) ^ jump_on;
+                    let do_jump = (topvar == 0) ^ *jump_on;
 
                     // println!("topvar: {}, jump_on: {}", topvar, jump_on);
 
                     if do_jump {
                         // println!("Jumping!");
-                        jump = Some(offset);
+                        jump = Some(*offset);
                     } else {
                         // println!("Not Jumping!");
                     }
@@ -202,7 +232,7 @@ where
                 }
                 Some(WhichToken::Ref(rf)) => {
                     // println!("FLOWPUSH");
-                    self.flow_stk.push(RuntimeSeqCtx { idx: 0, word: rf });
+                    self.flow_stk.push(rf);
                 }
                 None => {
                     // println!("FLOWPOP");
@@ -214,7 +244,10 @@ where
                 // We just popped off the jump command, so now we are back in
                 // the "parent" frame.
 
-                let new_cur = self.flow_stk.last_mut()?;
+                let new_cur = self
+                    .flow_stk
+                    .last_mut()?
+                    .as_seq_inner()?;
 
                 if jump < 0 {
                     let abs = jump.abs() as usize;
@@ -233,8 +266,13 @@ where
         Ok(StepResult::Working(ret))
     }
 
-    pub fn push_exec(&mut self, word: RuntimeWord<T, F>) {
-        self.flow_stk.push(RuntimeSeqCtx { idx: 0, word });
+    pub fn push_exec(&mut self, mut word: RuntimeWord<T, F>) {
+        // TODO: reset idx?
+        assert_eq!(
+            0,
+            word.as_seq_inner().unwrap().idx,
+        );
+        self.flow_stk.push(word);
     }
 }
 
@@ -268,9 +306,9 @@ where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RuntimeSeqCtx<T, F>);
-    fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error>;
-    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error>;
+    fn push(&mut self, data: RuntimeWord<T, F>);
+    fn pop(&mut self) -> Result<RuntimeWord<T, F>, Error>;
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error>;
 }
 
 pub enum StepResult<T> {
@@ -308,7 +346,7 @@ mod std_test {
         let seq = StdFuncSeq {
             inner: Arc::new(vec![
                 NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
                     name: "star".into(),
                 },
                 NamedStdRuntimeWord {
@@ -323,23 +361,23 @@ mod std_test {
                     name: "UCRJ".into(),
                 },
                 NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
                     name: "star".into(),
                 },
                 NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(pre_seq.clone()),
+                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
                     name: "star".into(),
                 },
             ]),
         };
 
-        // In the future, these words will be obtained from deserialized output,
-        // rather than being crafted manually. I'll probably need GhostCell for
-        // the self-referential parts
+        // // In the future, these words will be obtained from deserialized output,
+        // // rather than being crafted manually. I'll probably need GhostCell for
+        // // the self-referential parts
 
-        // Push `mstar` into the execution context, basically
-        // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(seq));
+        // // Push `mstar` into the execution context, basically
+        // // treating it as an "entry point"
+        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word(&seq)));
 
         loop {
             match x.step() {
@@ -382,14 +420,14 @@ mod nostd_test {
         // : mstar star -1 if star star then ;
         let seq = NoStdFuncSeq {
             inner: &[
-                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
                 RuntimeWord::LiteralVal(-1),
                 RuntimeWord::CondRelativeJump {
                     offset: 2,
                     jump_on: false,
                 },
-                RuntimeWord::VerbSeq(pre_seq.clone()),
-                RuntimeWord::VerbSeq(pre_seq.clone()),
+                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
+                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
             ],
         };
 
@@ -407,7 +445,7 @@ mod nostd_test {
 
         // Push `mstar` into the execution context, basically
         // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(seq));
+        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word(&seq)));
 
         loop {
             match x.step() {

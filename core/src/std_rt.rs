@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::FuncSeq;
 use crate::Runtime;
-use crate::RuntimeSeqCtx;
 use crate::RuntimeWord;
 use crate::{Error, ExecutionStack, Stack};
 
@@ -44,18 +43,18 @@ impl<T> Stack for StdVecStack<T> {
     }
 }
 
-impl<T, F> ExecutionStack<T, F> for StdVecStack<RuntimeSeqCtx<T, F>>
+impl<T, F> ExecutionStack<T, F> for StdVecStack<RuntimeWord<T, F>>
 where
     F: FuncSeq<T, F> + Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RuntimeSeqCtx<T, F>) {
+    fn push(&mut self, data: RuntimeWord<T, F>) {
         self.data.push(data)
     }
-    fn pop(&mut self) -> Result<RuntimeSeqCtx<T, F>, Error> {
+    fn pop(&mut self) -> Result<RuntimeWord<T, F>, Error> {
         self.data.pop().ok_or(Error::FlowStackEmpty)
     }
-    fn last_mut(&mut self) -> Result<&mut RuntimeSeqCtx<T, F>, Error> {
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error> {
         self.data.last_mut().ok_or(Error::FlowStackEmpty)
     }
 }
@@ -79,7 +78,7 @@ pub type StdRuntime = Runtime<
     BuiltinToken,
     StdFuncSeq,
     StdVecStack<i32>,
-    StdVecStack<RuntimeSeqCtx<BuiltinToken, StdFuncSeq>>,
+    StdVecStack<RuntimeWord<BuiltinToken, StdFuncSeq>>,
     String,
 >;
 
