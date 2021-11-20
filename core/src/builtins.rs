@@ -1,14 +1,14 @@
 use crate::*;
 use core::fmt::Write;
 
-pub fn bi_emit<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_emit<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let word = ctxt.data_stk.pop()? as u32;
@@ -16,36 +16,36 @@ where
     write!(&mut ctxt.cur_output, "{}", symbol).map_err(|_| Error::OutputFormat)
 }
 
-pub fn bi_pop<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_pop<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     writeln!(&mut ctxt.cur_output, "{}", ctxt.data_stk.pop()?)?;
     Ok(())
 }
 
-pub fn bi_cr<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_cr<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     writeln!(&mut ctxt.cur_output, "")?;
     Ok(())
 }
 
-pub fn bi_lt<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_lt<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val2 = ctxt.data_stk.pop()?;
@@ -54,12 +54,12 @@ where
     Ok(())
 }
 
-pub fn bi_gt<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_gt<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val2 = ctxt.data_stk.pop()?;
@@ -68,14 +68,14 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_push<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_retstk_push<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val = ctxt.data_stk.pop()?;
@@ -83,14 +83,14 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_pop<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_retstk_pop<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val = ctxt.ret_stk.pop()?;
@@ -98,12 +98,12 @@ where
     Ok(())
 }
 
-pub fn bi_eq<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_eq<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val1 = ctxt.data_stk.pop()?;
@@ -112,12 +112,12 @@ where
     Ok(())
 }
 
-pub fn bi_add<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_add<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val1 = ctxt.data_stk.pop()?;
@@ -126,12 +126,12 @@ where
     Ok(())
 }
 
-pub fn bi_dup<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_dup<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val1 = ctxt.data_stk.last()?.clone();
@@ -139,14 +139,14 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_dup<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_retstk_dup<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let val1 = ctxt.ret_stk.last()?.clone();
@@ -154,14 +154,14 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_swap<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_retstk_swap<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let top = ctxt.ret_stk.pop()?;
@@ -172,14 +172,14 @@ where
     Ok(())
 }
 
-pub fn bi_priv_loop<T, FuncTok, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
+pub fn bi_priv_loop<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     let lmt = ctxt.ret_stk.pop()?;

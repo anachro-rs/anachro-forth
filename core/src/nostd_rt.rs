@@ -37,101 +37,66 @@ impl<T, const N: usize> Stack for HVecStack<T, N> {
     }
 }
 
-impl<T, FuncTok, const N: usize> ExecutionStack<T, FuncTok> for HVecStack<RuntimeWord<T, FuncTok>, N>
+impl<BuiltinTok, SeqTok, const N: usize> ExecutionStack<BuiltinTok, SeqTok> for HVecStack<RuntimeWord<BuiltinTok, SeqTok>, N>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
-    fn push(&mut self, data: RuntimeWord<T, FuncTok>) {
+    fn push(&mut self, data: RuntimeWord<BuiltinTok, SeqTok>) {
         // TODO
         self.data.push(data).map_err(drop).unwrap()
     }
-    fn pop(&mut self) -> Result<RuntimeWord<T, FuncTok>, Error> {
+    fn pop(&mut self) -> Result<RuntimeWord<BuiltinTok, SeqTok>, Error> {
         self.data.pop().ok_or(Error::FlowStackEmpty)
     }
-    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, FuncTok>, Error> {
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<BuiltinTok, SeqTok>, Error> {
         self.data.last_mut().ok_or(Error::FlowStackEmpty)
     }
 }
 
 #[derive(Clone)]
-pub struct BuiltinToken<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> {
-    bi: Builtin<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+pub struct BuiltinToken<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> {
+    bi: Builtin<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
 }
 
-impl<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
-    BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>
+impl<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
+    BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>
 {
-    pub fn new(bi: Builtin<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Self {
+    pub fn new(bi: Builtin<DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Self {
         Self { bi }
     }
 
     pub fn exec(
         &self,
-        rt: &mut NoStdRuntime<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+        rt: &mut NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
     ) -> Result<(), Error> {
         (self.bi)(rt)
     }
 }
 
-pub type NoStdRuntime<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> =
+pub type NoStdRuntime<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> =
     Runtime<
-        BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
-        NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+        BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+        usize,
         HVecStack<i32, DATA_SZ>,
         HVecStack<
             RuntimeWord<
-                BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
-                NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+                BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+                usize,
             >,
             FLOW_SZ,
         >,
         String<OUTBUF_SZ>,
     >;
 
-#[derive(Clone)]
-pub struct NoStdFuncSeq<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> {
-    pub inner: &'a [RuntimeWord<
-        BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
-        NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
-    >],
-}
 
-// impl<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
-//     FuncSeq<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>
-//     for NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>
-// {
-//     // TODO(AJM): This impl is holding me back. It requires that every
-//     // FuncSeq can produce the next word on-demand, which would be hard
-//     // to do without holding the entire sequence, which may recurse.
-//     //
-//     // I wonder if I could get tricky, and have a builtin which loads a
-//     // sequence lazily? Or something that would allow me to smuggle this
-//     // out. Otherwise, the only thing I can think of is to have a dict
-//     // crate, that can summon builtins/sequences on-demand, and pass that
-//     // in on every call to `step`...
-//     //
-//     // I mean, I guess the runtime could own the dictionary again, it'd just
-//     // introduce two more generic parameters, one for the max sequence length,
-//     // and one for the number of sequences that could be held...
-//     fn get(
-//         &self,
-//         idx: usize,
-//     ) -> Option<RuntimeWord<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>> {
-//         match self.inner.get(idx) {
-//             Some(artw) => Some(artw.clone()),
-//             None => None,
-//         }
-//     }
-// }
+pub type NoStdRuntimeWord<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> = RuntimeWord<BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>, usize>;
 
-pub type NoStdRuntimeWord<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> = RuntimeWord<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>>;
+pub type Builtin<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> =
+    fn(&mut NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>;
 
-type Builtin<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> =
-    fn(&mut NoStdRuntime<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>;
-
-pub fn new_runtime<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>(
-) -> NoStdRuntime<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ> {
+pub fn new_runtime<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>(
+) -> NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ> {
     // These are the only data structures required, and Runtime is generic over the
     // stacks, so I could easily use heapless::Vec as a backing structure as well
     let ds = HVecStack::new(Error::DataStackEmpty);
@@ -150,10 +115,10 @@ pub fn new_runtime<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_
     }
 }
 
-pub fn std_builtins<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>(
+pub fn std_builtins<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>(
 ) -> &'static [(
     &'static str,
-    fn(&mut NoStdRuntime<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>,
+    fn(&mut NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>,
 )] {
     &[
         ("emit", crate::builtins::bi_emit),

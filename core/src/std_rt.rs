@@ -92,14 +92,6 @@ pub struct StdFuncSeq {
     pub inner: Arc<Vec<NamedStdRuntimeWord>>,
 }
 
-// impl FuncSeq<BuiltinToken, Self> for StdFuncSeq {
-//     fn get(&self, idx: usize) -> Option<RuntimeWord<BuiltinToken, Self>> {
-//         match self.inner.get(idx) {
-//             Some(artw) => Some(artw.word.clone()),
-//             None => None,
-//         }
-//     }
-// }
 
 pub type StdRuntimeWord = RuntimeWord<BuiltinToken, StdFuncSeq>;
 

@@ -55,58 +55,58 @@ impl From<core::fmt::Error> for Error {
     }
 }
 
-pub enum WhichToken<T, FuncTok>
+pub enum WhichToken<BuiltinTok, SeqTok>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
-    Single(T),
-    Ref(VerbSeqInner<FuncTok>),
+    Single(BuiltinTok),
+    Ref(VerbSeqInner<SeqTok>),
 }
 
 #[derive(Debug, Clone)]
-pub struct VerbSeqInner<FuncTok>
+pub struct VerbSeqInner<SeqTok>
 where
-    FuncTok: Clone,
+    SeqTok: Clone,
 {
-    tok: FuncTok,
+    tok: SeqTok,
     idx: usize,
 }
 
-impl<FuncTok> VerbSeqInner<FuncTok>
+impl<SeqTok> VerbSeqInner<SeqTok>
 where
-    FuncTok: Clone,
+    SeqTok: Clone,
 {
-    pub fn from_word(tok: FuncTok) -> Self {
+    pub fn from_word(tok: SeqTok) -> Self {
         Self {
-            tok: tok.clone(),
+            tok: tok,
             idx: 0,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum RuntimeWord<T, FuncTok>
+pub enum RuntimeWord<BuiltinTok, SeqTok>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
     LiteralVal(i32),
 
     // TODO: Blend these somehow?
-    Verb(T),
-    VerbSeq(VerbSeqInner<FuncTok>),
+    Verb(BuiltinTok),
+    VerbSeq(VerbSeqInner<SeqTok>),
 
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-impl<T, FuncTok> RuntimeWord<T, FuncTok>
+impl<BuiltinTok, SeqTok> RuntimeWord<BuiltinTok, SeqTok>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
-    pub fn as_seq_inner(&mut self) -> Result<&mut VerbSeqInner<FuncTok>, Error> {
+    pub fn as_seq_inner(&mut self) -> Result<&mut VerbSeqInner<SeqTok>, Error> {
         match self {
             RuntimeWord::VerbSeq(ref mut seq) => Ok(seq),
             _ => Err(Error::InternalError),
@@ -114,30 +114,30 @@ where
     }
 }
 
-pub struct Runtime<T, FuncTok, Sdata, Sexec, O>
+pub struct Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
     pub data_stk: Sdata,
     pub ret_stk: Sdata,
     pub flow_stk: Sexec,
-    pub _pd_ty_t_f: PhantomData<(T, FuncTok)>,
+    pub _pd_ty_t_f: PhantomData<(BuiltinTok, SeqTok)>,
     cur_output: O,
 }
 
-impl<Sdata, Sexec, T, FuncTok, O> Runtime<T, FuncTok, Sdata, Sexec, O>
+impl<Sdata, Sexec, BuiltinTok, SeqTok, O> Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write,
 {
-    pub fn step(&mut self) -> Result<StepResult<T, FuncTok>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<BuiltinTok, SeqTok>, Error> {
         match self.step_inner() {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -149,7 +149,7 @@ where
         }
     }
 
-    fn step_inner(&mut self) -> Result<StepResult<T, FuncTok>, Error> {
+    fn step_inner(&mut self) -> Result<StepResult<BuiltinTok, SeqTok>, Error> {
         let ret = 'oloop: loop {
             // TODO: I should set a limit to the max number of loop
             // iterations that are made here! Or maybe go back to
@@ -253,7 +253,20 @@ where
         Ok(StepResult::Working(ret))
     }
 
-    pub fn push_exec(&mut self, mut word: RuntimeWord<T, FuncTok>) {
+    pub fn provide_seq_tok(&mut self, seq: Option<RuntimeWord<BuiltinTok, SeqTok>>) -> Result<(), Error> {
+        if let Some(mut word) = seq {
+            if let Ok(wd) = word.as_seq_inner() {
+                assert_eq!(wd.idx, 0);
+                wd.idx = 0;
+            }
+            self.flow_stk.push(word);
+        } else {
+            self.flow_stk.pop()?;
+        }
+        Ok(())
+    }
+
+    pub fn push_exec(&mut self, mut word: RuntimeWord<BuiltinTok, SeqTok>) {
         if let Ok(wd) = word.as_seq_inner() {
             assert_eq!(wd.idx, 0);
             wd.idx = 0;
@@ -262,12 +275,12 @@ where
     }
 }
 
-impl<Sdata, Sexec, T, FuncTok, O> Runtime<T, FuncTok, Sdata, Sexec, O>
+impl<Sdata, Sexec, BuiltinTok, SeqTok, O> Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, FuncTok>,
-    FuncTok: Clone,
-    T: Clone,
+    Sexec: ExecutionStack<BuiltinTok, SeqTok>,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
     O: Write + Default,
 {
     pub fn exchange_output(&mut self) -> O {
@@ -287,23 +300,23 @@ pub trait Stack {
     fn last(&self) -> Result<&Self::Item, Error>;
 }
 
-pub trait ExecutionStack<T, FuncTok>
+pub trait ExecutionStack<BuiltinTok, SeqTok>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
-    fn push(&mut self, data: RuntimeWord<T, FuncTok>);
-    fn pop(&mut self) -> Result<RuntimeWord<T, FuncTok>, Error>;
-    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, FuncTok>, Error>;
+    fn push(&mut self, data: RuntimeWord<BuiltinTok, SeqTok>);
+    fn pop(&mut self) -> Result<RuntimeWord<BuiltinTok, SeqTok>, Error>;
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<BuiltinTok, SeqTok>, Error>;
 }
 
-pub enum StepResult<T, FuncTok>
+pub enum StepResult<BuiltinTok, SeqTok>
 where
-    FuncTok: Clone,
-    T: Clone,
+    SeqTok: Clone,
+    BuiltinTok: Clone,
 {
     Done,
-    Working(WhichToken<T, FuncTok>),
+    Working(WhichToken<BuiltinTok, SeqTok>),
 }
 
 #[cfg(test)]
@@ -383,23 +396,27 @@ mod std_test {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
+                    println!("EXEC!");
                     ft.exec(&mut x).unwrap();
                 }
                 Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
-                    let mut good = false;
-                    if let Some(seq) = fs_map.get(&rtw.tok).map(Clone::clone) {
-                        if let Some(wd) = seq.inner.get(rtw.idx) {
-                            x.push_exec(wd.word.clone());
-                            good = true;
-                        }
+
+                    let c = fs_map
+                        .get(&rtw.tok)
+                        .and_then(|n| n.inner.get(rtw.idx))
+                        .map(|n| n.clone().word);
+
+                    if c.is_some() {
+                        println!("Push some! {} {}", rtw.tok, rtw.idx);
+                    } else {
+                        println!("Push none! {} {}", rtw.tok, rtw.idx);
                     }
-                    if !good {
-                        // THIS IS A HACK
-                        ExecutionStack::pop(&mut x.flow_stk).unwrap();
-                    }
+
+                    x.provide_seq_tok(c).unwrap();
+
                 }
                 Err(_e) => todo!(),
             }
@@ -412,45 +429,87 @@ mod std_test {
 }
 
 
-#[cfg(TODO)]
+#[cfg(test)]
 mod nostd_test {
     use super::*;
     use crate::nostd_rt::*;
+    use heapless::{Vec, String};
 
     #[test]
     fn foo() {
 
+        let mut deser_dict: Vec<
+            Vec<
+                RuntimeWord<
+                    BuiltinToken<32, 16, 256>,
+                    usize,
+                >,
+                8
+            >,
+            8
+        > = Vec::new();
+
         // Manually craft a word, roughly:
         // : star 42 emit ;
-        let pre_seq = NoStdFuncSeq {
-            inner: &[
-                RuntimeWord::LiteralVal(42),
-                RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
-            ],
-        };
+        deser_dict.push(
+            {
+                let mut new: Vec<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 8> = Vec::new();
+                new.push(RuntimeWord::LiteralVal(42)).ok();
+                new.push(RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit))).ok();
+                new
+            }
+        ).ok();
+
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
-        let seq = NoStdFuncSeq {
-            inner: &[
-                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-                RuntimeWord::LiteralVal(-1),
-                RuntimeWord::CondRelativeJump {
+        deser_dict.push(
+            {
+                let mut new: Vec<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 8> = Vec::new();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
+                new.push(RuntimeWord::LiteralVal(-1)).ok();
+                new.push(RuntimeWord::CondRelativeJump {
                     offset: 2,
                     jump_on: false,
-                },
-                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-                RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-            ],
-        };
+                }).ok();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
+                new
+            }
+        ).ok();
+
+        // Not mutable anymore
+        let idx = deser_dict;
 
         let mut x = new_runtime::<32, 16, 256>();
 
-        // let sz = core::mem::size_of::<RuntimeWord<BuiltinToken<1, 1, 1>, NoStdFuncSeq<1, 1, 1>>>();
-        // // <1,   1,  1> -> 112
-        // // <16,  1,  1> -> 224
-        // // <1,  32,  1> -> 1104
-        // assert_eq!(856, sz);
+        // BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+        // usize,
+        // HVecStack<i32, DATA_SZ>,
+        // HVecStack<
+        //     RuntimeWord<
+        //         BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
+        //         usize,
+        //     >,
+        //     FLOW_SZ,
+        // >,
+        // String<OUTBUF_SZ>,
+
+        let _sz = core::mem::size_of::<Runtime<
+            BuiltinToken<32, 16, 256>,
+            usize,
+            HVecStack<i32, 32>,
+            HVecStack<
+                RuntimeWord<
+                    BuiltinToken<32, 16, 256>,
+                    usize,
+                >,
+                16,
+            >,
+            String<256>,
+        >>();
+        // <32, 16, 256> -> 856 (on a 64-bit machine)
+        // assert_eq!(856, _sz);
 
         // In the future, these words will be obtained from deserialized output,
         // rather than being crafted manually. I'll probably need GhostCell for
@@ -458,22 +517,42 @@ mod nostd_test {
 
         // Push `mstar` into the execution context, basically
         // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word(&seq)));
+        x.push_exec(RuntimeWord::VerbSeq(
+            // Insert `mstar`, which is deser_dict[1]
+            VerbSeqInner { tok: 1, idx: 0 }
+        ));
 
         loop {
             match x.step() {
-                Ok(StepResult::Done) => break,
+                Ok(StepResult::Done) => {
+                    // println!("DONE!");
+                    break
+                }
                 Ok(StepResult::Working(WhichToken::Single(ft))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
+                    // println!("EXEC!");
                     ft.exec(&mut x).unwrap();
                 }
                 Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
-                    x.push_exec(rtw);
+
+                    let c = idx
+                        .get(rtw.tok)
+                        .and_then(|n| n.get(rtw.idx))
+                        .map(|n| n.clone());
+
+                    // if c.is_some() {
+                    //     println!("Push some! {} {}", rtw.tok, rtw.idx);
+                    // } else {
+                    //     println!("Push none! {} {}", rtw.tok, rtw.idx);
+                    // }
+
+                    x.provide_seq_tok(c).unwrap();
+
                 }
                 Err(_e) => todo!(),
             }
