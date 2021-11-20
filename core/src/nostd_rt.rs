@@ -103,6 +103,19 @@ impl<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
     FuncSeq<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>
     for NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>
 {
+    // TODO(AJM): This impl is holding me back. It requires that every
+    // FuncSeq can produce the next word on-demand, which would be hard
+    // to do without holding the entire sequence, which may recurse.
+    //
+    // I wonder if I could get tricky, and have a builtin which loads a
+    // sequence lazily? Or something that would allow me to smuggle this
+    // out. Otherwise, the only thing I can think of is to have a dict
+    // crate, that can summon builtins/sequences on-demand, and pass that
+    // in on every call to `step`...
+    //
+    // I mean, I guess the runtime could own the dictionary again, it'd just
+    // introduce two more generic parameters, one for the max sequence length,
+    // and one for the number of sequences that could be held...
     fn get(
         &self,
         idx: usize,
