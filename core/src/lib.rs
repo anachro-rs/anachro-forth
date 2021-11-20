@@ -64,6 +64,17 @@ where
     fn get(&self, _idx: usize) -> Option<RuntimeWord<T, F>>;
 }
 
+
+
+pub enum WhichToken<T, F>
+where
+    F: FuncSeq<T, F> + Clone,
+    T: Clone,
+{
+    Single(T),
+    Ref(RuntimeWord<T, F>),
+}
+
 #[derive(Debug, Clone)]
 pub struct VerbSeqInner<T, F>
 where
@@ -141,7 +152,7 @@ where
     T: Clone,
     O: Write,
 {
-    pub fn step(&mut self) -> Result<StepResult<T>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<T, F>, Error> {
         match self.step_inner() {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -153,7 +164,7 @@ where
         }
     }
 
-    fn step_inner(&mut self) -> Result<StepResult<T>, Error> {
+    fn step_inner(&mut self) -> Result<StepResult<T, F>, Error> {
         let ret = 'oloop: loop {
             // TODO: I should set a limit to the max number of loop
             // iterations that are made here! Or maybe go back to
@@ -164,15 +175,6 @@ where
             };
 
             let mut jump = None;
-
-            enum WhichToken<T, F>
-            where
-                F: FuncSeq<T, F> + Clone,
-                T: Clone,
-            {
-                Single(T),
-                Ref(RuntimeWord<T, F>),
-            }
 
             let to_push = match cur {
                 RuntimeWord::LiteralVal(lit) => {
@@ -228,11 +230,11 @@ where
                 Some(WhichToken::Single(ft)) => {
                     // println!("BREAK");
                     self.flow_stk.pop()?;
-                    break 'oloop ft;
+                    break 'oloop WhichToken::Single(ft);
                 }
                 Some(WhichToken::Ref(rf)) => {
                     // println!("FLOWPUSH");
-                    self.flow_stk.push(rf);
+                    break 'oloop WhichToken::Ref(rf);
                 }
                 None => {
                     // println!("FLOWPOP");
@@ -267,11 +269,10 @@ where
     }
 
     pub fn push_exec(&mut self, mut word: RuntimeWord<T, F>) {
-        // TODO: reset idx?
-        assert_eq!(
-            0,
-            word.as_seq_inner().unwrap().idx,
-        );
+        if let Ok(wd) = word.as_seq_inner() {
+            assert_eq!(wd.idx, 0);
+            wd.idx = 0;
+        }
         self.flow_stk.push(word);
     }
 }
@@ -311,9 +312,13 @@ where
     fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error>;
 }
 
-pub enum StepResult<T> {
+pub enum StepResult<T, F>
+where
+    F: FuncSeq<T, F> + Clone,
+    T: Clone,
+{
     Done,
-    Working(T),
+    Working(WhichToken<T, F>),
 }
 
 #[cfg(test)]
@@ -382,11 +387,17 @@ mod std_test {
         loop {
             match x.step() {
                 Ok(StepResult::Done) => break,
-                Ok(StepResult::Working(ft)) => {
+                Ok(StepResult::Working(WhichToken::Single(ft))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
                     ft.exec(&mut x).unwrap();
+                }
+                Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    x.push_exec(rtw);
                 }
                 Err(_e) => todo!(),
             }
@@ -450,11 +461,17 @@ mod nostd_test {
         loop {
             match x.step() {
                 Ok(StepResult::Done) => break,
-                Ok(StepResult::Working(ft)) => {
+                Ok(StepResult::Working(WhichToken::Single(ft))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
                     ft.exec(&mut x).unwrap();
+                }
+                Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    x.push_exec(rtw);
                 }
                 Err(_e) => todo!(),
             }
