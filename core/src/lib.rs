@@ -55,73 +55,58 @@ impl From<core::fmt::Error> for Error {
     }
 }
 
-pub trait FuncSeq<T, F>
+pub enum WhichToken<T, FuncTok>
 where
-    F: FuncSeq<T, F>,
-    T: Clone,
-    F: Clone,
-{
-    fn get(&self, _idx: usize) -> Option<RuntimeWord<T, F>>;
-}
-
-
-
-pub enum WhichToken<T, F>
-where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
     Single(T),
-    Ref(RuntimeWord<T, F>),
+    Ref(VerbSeqInner<FuncTok>),
 }
 
 #[derive(Debug, Clone)]
-pub struct VerbSeqInner<T, F>
+pub struct VerbSeqInner<FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
-    T: Clone,
+    FuncTok: Clone,
 {
-    word: F,
+    tok: FuncTok,
     idx: usize,
-    _pd_t_ty: PhantomData<T>,
 }
 
-impl<T, F> VerbSeqInner<T, F>
+impl<FuncTok> VerbSeqInner<FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
-    T: Clone,
+    FuncTok: Clone,
 {
-    pub fn from_word(word: &F) -> Self {
+    pub fn from_word(tok: FuncTok) -> Self {
         Self {
-            word: word.clone(),
+            tok: tok.clone(),
             idx: 0,
-            _pd_t_ty: PhantomData,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum RuntimeWord<T, F>
+pub enum RuntimeWord<T, FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
     LiteralVal(i32),
 
     // TODO: Blend these somehow?
     Verb(T),
-    VerbSeq(VerbSeqInner<T, F>),
+    VerbSeq(VerbSeqInner<FuncTok>),
 
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-impl<T, F> RuntimeWord<T,F>
+impl<T, FuncTok> RuntimeWord<T, FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
-    pub fn as_seq_inner(&mut self) -> Result<&mut VerbSeqInner<T, F>, Error> {
+    pub fn as_seq_inner(&mut self) -> Result<&mut VerbSeqInner<FuncTok>, Error> {
         match self {
             RuntimeWord::VerbSeq(ref mut seq) => Ok(seq),
             _ => Err(Error::InternalError),
@@ -129,30 +114,30 @@ where
     }
 }
 
-pub struct Runtime<T, F, Sdata, Sexec, O>
+pub struct Runtime<T, FuncTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
     pub data_stk: Sdata,
     pub ret_stk: Sdata,
     pub flow_stk: Sexec,
-    pub _pd_ty_t_f: PhantomData<(T, F)>,
+    pub _pd_ty_t_f: PhantomData<(T, FuncTok)>,
     cur_output: O,
 }
 
-impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
+impl<Sdata, Sexec, T, FuncTok, O> Runtime<T, FuncTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
-    pub fn step(&mut self) -> Result<StepResult<T, F>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<T, FuncTok>, Error> {
         match self.step_inner() {
             Ok(r) => Ok(r),
             Err(e) => {
@@ -164,7 +149,7 @@ where
         }
     }
 
-    fn step_inner(&mut self) -> Result<StepResult<T, F>, Error> {
+    fn step_inner(&mut self) -> Result<StepResult<T, FuncTok>, Error> {
         let ret = 'oloop: loop {
             // TODO: I should set a limit to the max number of loop
             // iterations that are made here! Or maybe go back to
@@ -191,7 +176,7 @@ where
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),
                     // and overshooting (probably an engine error)
-                    let ret = seq.word.get(seq.idx).map(WhichToken::Ref);
+                    let ret = Some(WhichToken::Ref(seq.clone()));
                     // println!("\tgot? {}", ret.is_some());
                     seq.idx += 1;
                     ret
@@ -268,7 +253,7 @@ where
         Ok(StepResult::Working(ret))
     }
 
-    pub fn push_exec(&mut self, mut word: RuntimeWord<T, F>) {
+    pub fn push_exec(&mut self, mut word: RuntimeWord<T, FuncTok>) {
         if let Ok(wd) = word.as_seq_inner() {
             assert_eq!(wd.idx, 0);
             wd.idx = 0;
@@ -277,11 +262,11 @@ where
     }
 }
 
-impl<Sdata, Sexec, T, F, O> Runtime<T, F, Sdata, Sexec, O>
+impl<Sdata, Sexec, T, FuncTok, O> Runtime<T, FuncTok, Sdata, Sexec, O>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write + Default,
 {
@@ -302,23 +287,23 @@ pub trait Stack {
     fn last(&self) -> Result<&Self::Item, Error>;
 }
 
-pub trait ExecutionStack<T, F>
+pub trait ExecutionStack<T, FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RuntimeWord<T, F>);
-    fn pop(&mut self) -> Result<RuntimeWord<T, F>, Error>;
-    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error>;
+    fn push(&mut self, data: RuntimeWord<T, FuncTok>);
+    fn pop(&mut self) -> Result<RuntimeWord<T, FuncTok>, Error>;
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, FuncTok>, Error>;
 }
 
-pub enum StepResult<T, F>
+pub enum StepResult<T, FuncTok>
 where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
     Done,
-    Working(WhichToken<T, F>),
+    Working(WhichToken<T, FuncTok>),
 }
 
 #[cfg(test)]
@@ -326,55 +311,62 @@ mod std_test {
     use super::*;
     use crate::std_rt::*;
     use std::sync::Arc;
+    use std::collections::BTreeMap;
 
     #[test]
     fn foo() {
         let mut x = new_runtime();
 
+        let mut fs_map: BTreeMap<String, StdFuncSeq> = BTreeMap::new();
+
         // Manually craft a word, roughly:
         // : star 42 emit ;
-        let pre_seq = StdFuncSeq {
-            inner: Arc::new(vec![
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::LiteralVal(42),
-                    name: "42".into(),
-                },
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
-                    name: "emit".into(),
-                },
-            ]),
-        };
+        fs_map.insert(
+            "star".into(),
+            StdFuncSeq {
+                inner: Arc::new(vec![
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::LiteralVal(42),
+                        name: "42".into(),
+                    },
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)),
+                        name: "emit".into(),
+                    },
+                ]),
+            });
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
-        let seq = StdFuncSeq {
-            inner: Arc::new(vec![
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-                    name: "star".into(),
-                },
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::LiteralVal(-1),
-                    name: "-1".into(),
-                },
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::CondRelativeJump {
-                        offset: 2,
-                        jump_on: false,
+        fs_map.insert(
+            "mstar".into(),
+            StdFuncSeq {
+                inner: Arc::new(vec![
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::VerbSeq(VerbSeqInner::from_word("star".to_string())),
+                        name: "star".into(),
                     },
-                    name: "UCRJ".into(),
-                },
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-                    name: "star".into(),
-                },
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(&pre_seq)),
-                    name: "star".into(),
-                },
-            ]),
-        };
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::LiteralVal(-1),
+                        name: "-1".into(),
+                    },
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::CondRelativeJump {
+                            offset: 2,
+                            jump_on: false,
+                        },
+                        name: "UCRJ".into(),
+                    },
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::VerbSeq(VerbSeqInner::from_word("star".to_string())),
+                        name: "star".into(),
+                    },
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::VerbSeq(VerbSeqInner::from_word("star".to_string())),
+                        name: "star".into(),
+                    },
+                ]),
+            });
 
         // // In the future, these words will be obtained from deserialized output,
         // // rather than being crafted manually. I'll probably need GhostCell for
@@ -382,7 +374,7 @@ mod std_test {
 
         // // Push `mstar` into the execution context, basically
         // // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word(&seq)));
+        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word("mstar".to_string())));
 
         loop {
             match x.step() {
@@ -397,7 +389,17 @@ mod std_test {
                     // The runtime yields back at every call to a "builtin". Here, I
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
-                    x.push_exec(rtw);
+                    let mut good = false;
+                    if let Some(seq) = fs_map.get(&rtw.tok).map(Clone::clone) {
+                        if let Some(wd) = seq.inner.get(rtw.idx) {
+                            x.push_exec(wd.word.clone());
+                            good = true;
+                        }
+                    }
+                    if !good {
+                        // THIS IS A HACK
+                        ExecutionStack::pop(&mut x.flow_stk).unwrap();
+                    }
                 }
                 Err(_e) => todo!(),
             }
@@ -410,7 +412,7 @@ mod std_test {
 }
 
 
-#[cfg(test)]
+#[cfg(TODO)]
 mod nostd_test {
     use super::*;
     use crate::nostd_rt::*;

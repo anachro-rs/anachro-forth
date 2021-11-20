@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::FuncSeq;
 use crate::Runtime;
 use crate::RuntimeWord;
 use crate::{Error, ExecutionStack, Stack};
@@ -45,7 +44,7 @@ impl<T> Stack for StdVecStack<T> {
 
 impl<T, F> ExecutionStack<T, F> for StdVecStack<RuntimeWord<T, F>>
 where
-    F: FuncSeq<T, F> + Clone,
+    F: Clone,
     T: Clone,
 {
     fn push(&mut self, data: RuntimeWord<T, F>) {
@@ -76,16 +75,16 @@ impl BuiltinToken {
 
 pub type StdRuntime = Runtime<
     BuiltinToken,
-    StdFuncSeq,
+    String,
     StdVecStack<i32>,
-    StdVecStack<RuntimeWord<BuiltinToken, StdFuncSeq>>,
+    StdVecStack<RuntimeWord<BuiltinToken, String>>,
     String,
 >;
 
 #[derive(Clone)]
 pub struct NamedStdRuntimeWord {
     pub name: String,
-    pub word: RuntimeWord<BuiltinToken, StdFuncSeq>,
+    pub word: RuntimeWord<BuiltinToken, String>,
 }
 
 #[derive(Clone)]
@@ -93,14 +92,14 @@ pub struct StdFuncSeq {
     pub inner: Arc<Vec<NamedStdRuntimeWord>>,
 }
 
-impl FuncSeq<BuiltinToken, Self> for StdFuncSeq {
-    fn get(&self, idx: usize) -> Option<RuntimeWord<BuiltinToken, Self>> {
-        match self.inner.get(idx) {
-            Some(artw) => Some(artw.word.clone()),
-            None => None,
-        }
-    }
-}
+// impl FuncSeq<BuiltinToken, Self> for StdFuncSeq {
+//     fn get(&self, idx: usize) -> Option<RuntimeWord<BuiltinToken, Self>> {
+//         match self.inner.get(idx) {
+//             Some(artw) => Some(artw.word.clone()),
+//             None => None,
+//         }
+//     }
+// }
 
 pub type StdRuntimeWord = RuntimeWord<BuiltinToken, StdFuncSeq>;
 

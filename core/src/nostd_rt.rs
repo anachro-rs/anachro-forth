@@ -1,6 +1,5 @@
 use core::marker::PhantomData;
 
-use crate::FuncSeq;
 use crate::Runtime;
 use crate::RuntimeWord;
 use crate::{Error, ExecutionStack, Stack};
@@ -38,19 +37,19 @@ impl<T, const N: usize> Stack for HVecStack<T, N> {
     }
 }
 
-impl<T, F, const N: usize> ExecutionStack<T, F> for HVecStack<RuntimeWord<T, F>, N>
+impl<T, FuncTok, const N: usize> ExecutionStack<T, FuncTok> for HVecStack<RuntimeWord<T, FuncTok>, N>
 where
-    F: FuncSeq<T, F> + Clone,
+    FuncTok: Clone,
     T: Clone,
 {
-    fn push(&mut self, data: RuntimeWord<T, F>) {
+    fn push(&mut self, data: RuntimeWord<T, FuncTok>) {
         // TODO
         self.data.push(data).map_err(drop).unwrap()
     }
-    fn pop(&mut self) -> Result<RuntimeWord<T, F>, Error> {
+    fn pop(&mut self) -> Result<RuntimeWord<T, FuncTok>, Error> {
         self.data.pop().ok_or(Error::FlowStackEmpty)
     }
-    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, F>, Error> {
+    fn last_mut(&mut self) -> Result<&mut RuntimeWord<T, FuncTok>, Error> {
         self.data.last_mut().ok_or(Error::FlowStackEmpty)
     }
 }
@@ -98,33 +97,33 @@ pub struct NoStdFuncSeq<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OU
     >],
 }
 
-impl<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
-    FuncSeq<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>
-    for NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>
-{
-    // TODO(AJM): This impl is holding me back. It requires that every
-    // FuncSeq can produce the next word on-demand, which would be hard
-    // to do without holding the entire sequence, which may recurse.
-    //
-    // I wonder if I could get tricky, and have a builtin which loads a
-    // sequence lazily? Or something that would allow me to smuggle this
-    // out. Otherwise, the only thing I can think of is to have a dict
-    // crate, that can summon builtins/sequences on-demand, and pass that
-    // in on every call to `step`...
-    //
-    // I mean, I guess the runtime could own the dictionary again, it'd just
-    // introduce two more generic parameters, one for the max sequence length,
-    // and one for the number of sequences that could be held...
-    fn get(
-        &self,
-        idx: usize,
-    ) -> Option<RuntimeWord<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>> {
-        match self.inner.get(idx) {
-            Some(artw) => Some(artw.clone()),
-            None => None,
-        }
-    }
-}
+// impl<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize>
+//     FuncSeq<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>
+//     for NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>
+// {
+//     // TODO(AJM): This impl is holding me back. It requires that every
+//     // FuncSeq can produce the next word on-demand, which would be hard
+//     // to do without holding the entire sequence, which may recurse.
+//     //
+//     // I wonder if I could get tricky, and have a builtin which loads a
+//     // sequence lazily? Or something that would allow me to smuggle this
+//     // out. Otherwise, the only thing I can think of is to have a dict
+//     // crate, that can summon builtins/sequences on-demand, and pass that
+//     // in on every call to `step`...
+//     //
+//     // I mean, I guess the runtime could own the dictionary again, it'd just
+//     // introduce two more generic parameters, one for the max sequence length,
+//     // and one for the number of sequences that could be held...
+//     fn get(
+//         &self,
+//         idx: usize,
+//     ) -> Option<RuntimeWord<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, Self>> {
+//         match self.inner.get(idx) {
+//             Some(artw) => Some(artw.clone()),
+//             None => None,
+//         }
+//     }
+// }
 
 pub type NoStdRuntimeWord<'a, const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_SZ: usize> = RuntimeWord<BuiltinToken<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>, NoStdFuncSeq<'a, DATA_SZ, FLOW_SZ, OUTBUF_SZ>>;
 

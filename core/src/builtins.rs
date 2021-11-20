@@ -1,13 +1,13 @@
 use crate::*;
 use core::fmt::Write;
 
-pub fn bi_emit<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_emit<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -16,11 +16,11 @@ where
     write!(&mut ctxt.cur_output, "{}", symbol).map_err(|_| Error::OutputFormat)
 }
 
-pub fn bi_pop<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_pop<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -28,11 +28,11 @@ where
     Ok(())
 }
 
-pub fn bi_cr<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_cr<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -40,11 +40,11 @@ where
     Ok(())
 }
 
-pub fn bi_lt<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_lt<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -54,11 +54,11 @@ where
     Ok(())
 }
 
-pub fn bi_gt<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_gt<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -68,13 +68,13 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_push<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_retstk_push<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -83,13 +83,13 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_pop<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_retstk_pop<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -98,11 +98,11 @@ where
     Ok(())
 }
 
-pub fn bi_eq<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_eq<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -112,11 +112,11 @@ where
     Ok(())
 }
 
-pub fn bi_add<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_add<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -126,11 +126,11 @@ where
     Ok(())
 }
 
-pub fn bi_dup<T, F, Sdata, Sexec, O>(ctxt: &mut Runtime<T, F, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_dup<T, FuncTok, Sdata, Sexec, O>(ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -139,13 +139,13 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_dup<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_retstk_dup<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -154,13 +154,13 @@ where
     Ok(())
 }
 
-pub fn bi_retstk_swap<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_retstk_swap<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
@@ -172,13 +172,13 @@ where
     Ok(())
 }
 
-pub fn bi_priv_loop<T, F, Sdata, Sexec, O>(
-    ctxt: &mut Runtime<T, F, Sdata, Sexec, O>,
+pub fn bi_priv_loop<T, FuncTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<T, FuncTok, Sdata, Sexec, O>,
 ) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
-    Sexec: ExecutionStack<T, F>,
-    F: FuncSeq<T, F> + Clone,
+    Sexec: ExecutionStack<T, FuncTok>,
+    FuncTok: Clone,
     T: Clone,
     O: Write,
 {
