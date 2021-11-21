@@ -1,5 +1,5 @@
 use anachro_forth_host::{evaluate, Context};
-use anachro_forth_core::{std_rt::std_builtins, StepResult};
+use anachro_forth_core::{StepResult, WhichToken, std_rt::std_builtins};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output
@@ -83,7 +83,25 @@ fn single_lines() {
         loop {
             match ctxt.step().unwrap() {
                 StepResult::Done => break,
-                StepResult::Working(fs) => fs.exec(&mut ctxt.rt).unwrap(),
+                StepResult::Working(WhichToken::Single(ft)) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    ft.exec(&mut ctxt.rt).unwrap();
+                }
+                StepResult::Working(WhichToken::Ref(rtw)) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+
+                    let c = ctxt.dict.data
+                        .get(&rtw.tok)
+                        .and_then(|n| n.inner.get(rtw.idx))
+                        .map(|n| n.clone().word);
+
+                    ctxt.rt.provide_seq_tok(c).unwrap();
+
+                }
             }
         }
         assert_eq!(output, &ctxt.output());
@@ -105,7 +123,25 @@ fn multi_lines() {
             loop {
                 match ctxt.step().unwrap() {
                     StepResult::Done => break,
-                    StepResult::Working(fs) => fs.exec(&mut ctxt.rt).unwrap(),
+                    StepResult::Working(WhichToken::Single(ft)) => {
+                        // The runtime yields back at every call to a "builtin". Here, I
+                        // call the builtin immediately, but I could also yield further up,
+                        // to be resumed at a later time
+                        ft.exec(&mut ctxt.rt).unwrap();
+                    }
+                    StepResult::Working(WhichToken::Ref(rtw)) => {
+                        // The runtime yields back at every call to a "builtin". Here, I
+                        // call the builtin immediately, but I could also yield further up,
+                        // to be resumed at a later time
+
+                        let c = ctxt.dict.data
+                            .get(&rtw.tok)
+                            .and_then(|n| n.inner.get(rtw.idx))
+                            .map(|n| n.clone().word);
+
+                        ctxt.rt.provide_seq_tok(c).unwrap();
+
+                    }
                 }
             }
         }

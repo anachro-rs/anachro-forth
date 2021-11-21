@@ -36,7 +36,7 @@ where
     BuiltinTok: Clone,
     O: Write,
 {
-    writeln!(&mut ctxt.cur_output, "")?;
+    writeln!(&mut ctxt.cur_output)?;
     Ok(())
 }
 
@@ -134,7 +134,7 @@ where
     BuiltinTok: Clone,
     O: Write,
 {
-    let val1 = ctxt.data_stk.last()?.clone();
+    let val1 = *ctxt.data_stk.last()?;
     ctxt.data_stk.push(val1);
     Ok(())
 }
@@ -149,7 +149,7 @@ where
     BuiltinTok: Clone,
     O: Write,
 {
-    let val1 = ctxt.ret_stk.last()?.clone();
+    let val1 = *ctxt.ret_stk.last()?;
     ctxt.ret_stk.push(val1);
     Ok(())
 }

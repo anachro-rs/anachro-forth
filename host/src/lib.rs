@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 use afc::std_rt::{BuiltinToken, NamedStdRuntimeWord, StdFuncSeq, StdRuntimeWord, StdVecStack, new_runtime, std_builtins};
-use afc::{RuntimeSeqCtx, RuntimeWord, StepResult};
+use afc::{RuntimeWord, StepResult, VerbSeqInner};
 use anachro_forth_core as afc;
 
 use afc::{std_rt::StdRuntime, Error};
@@ -13,112 +13,118 @@ use afc::{std_rt::StdRuntime, Error};
 pub enum SerWord {
     LiteralVal(i32),
     Verb(String),
-    VerbSeq(Vec<SerWord>),
+    VerbSeq(String),
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
 // TODO: Make a method of NamedStdRuntimeWord
-fn ser_srw(word: &NamedStdRuntimeWord, toplevel: bool) -> SerWord {
-    match &word.word {
-        RuntimeWord::LiteralVal(ref lit) => SerWord::LiteralVal(*lit),
-        RuntimeWord::Verb(_t) => SerWord::Verb(word.name.clone()),
-        RuntimeWord::VerbSeq(t) => {
-            if toplevel {
-                let mut out = Vec::new();
-                for c in t.inner.iter() {
-                    // Also, redundant?
-                    out.push(ser_srw(c, false));
-                }
-                SerWord::VerbSeq(out)
-            } else {
-                SerWord::Verb(word.name.clone())
-            }
-        }
-        RuntimeWord::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
-        RuntimeWord::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+fn ser_srw(words: &StdFuncSeq) -> Vec<SerWord> {
+    let mut out = vec![];
+
+    for word in words.inner.iter() {
+        let new = match &word.word {
+            RuntimeWord::LiteralVal(lit) => SerWord::LiteralVal(*lit),
+            RuntimeWord::Verb(_) => SerWord::Verb(word.name.clone()),
+            RuntimeWord::VerbSeq(seq) => {
+                SerWord::VerbSeq(seq.tok.clone())
+            },
+            RuntimeWord::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+            RuntimeWord::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+        };
+        out.push(new);
     }
+
+    out
 }
 
 
 pub struct Dict {
-    pub(crate) data: BTreeMap<String, NamedStdRuntimeWord>,
+    pub bis: BTreeMap<String, BuiltinToken>,
+    pub data: BTreeMap<String, StdFuncSeq>,
+    pub(crate) shame_idx: usize,
 }
 
 #[derive(Debug, Serialize)]
 pub struct SerDict {
-    data: Vec<(String, SerWord)>,
+    data: Vec<(String, Vec<SerWord>)>,
+    bis: Vec<String>,
 }
 
 impl Dict {
     pub fn new() -> Self {
         Self {
+            bis: BTreeMap::new(),
             data: BTreeMap::new(),
+            shame_idx: 0,
         }
     }
 
     pub fn serialize(&self) -> SerDict {
-        let mut out = BTreeMap::new();
+        let mut out: BTreeMap<String, Vec<SerWord>> = BTreeMap::new();
 
         for (word, val) in self.data.iter() {
-            out.insert(word.clone(), ser_srw(val, true));
+            out.insert(word.clone(), ser_srw(val));
+            // println!("UHOH: {}", word);
         }
 
-        let mut verbs: BTreeSet<String> = BTreeSet::new();
+        println!("{:?}", out);
+
+        let mut all_verbs: BTreeSet<String> = BTreeSet::new();
+        let mut used_verbs: BTreeSet<String> = BTreeSet::new();
 
         for (name, _) in std_builtins() {
-            verbs.insert(name.to_string());
+            all_verbs.insert(name.to_string());
         }
 
-        let mut vout = vec![];
+        let mut vout: BTreeSet<String> = BTreeSet::new();
+        let mut data: Vec<(String, Vec<SerWord>)> = vec![];
 
         // This is to ensure that items are serialized in the necessary order,
         // e.g. if `mstar` calls `star`, `star` is guaranteed to be serialized
         // first in order.
-        //
+
         // This MAY not be necessary, depending on how I do the deserialization,
         // with two passes, it's likely it doesn't matter
         while !out.is_empty() {
             let nowt = out.clone();
 
-            for (k, v) in nowt.iter() {
-                match v {
-                    SerWord::Verb(t) => {
-                        if verbs.contains(t.as_str()) {
-                            out.remove(k.as_str());
-                        } else {
-                            panic!()
-                        }
-                    },
-                    SerWord::VerbSeq(vs) => {
-                        let filled = vs.iter().all(|sw| {
-                            if let SerWord::Verb(name) = sw {
-                                verbs.contains(name.as_str()) || vout.iter().any(|(kin, _)| name == kin)
+            'seqs: for (k, v) in nowt.iter() {
+                'seqelem: for val in v {
+                    match val {
+                        SerWord::LiteralVal(_) => continue 'seqelem,
+                        SerWord::Verb(sw) => {
+                            if all_verbs.contains(sw) {
+                                used_verbs.insert(sw.to_string());
                             } else {
-                                true
+                                panic!()
                             }
-                        });
-
-                        if filled {
-                            out.remove(k.as_str());
-                            vout.push((k.to_string(), v.clone()));
                         }
-                    },
-                    _ => {
-                        out.remove(k.as_str());
-                        vout.push((k.to_string(), v.clone()))
-                    },
+                        SerWord::VerbSeq(vs) => {
+                            if vout.contains(vs) {
+                                continue 'seqelem;
+                            } else {
+                                continue 'seqs;
+                            }
+                        },
+                        SerWord::UncondRelativeJump { .. } => continue 'seqelem,
+                        SerWord::CondRelativeJump { .. } => continue 'seqelem,
+                    }
                 }
+
+                out.remove(k);
+                vout.insert(k.to_string());
+                data.push((k.to_string(), v.clone()));
             }
         }
 
-        SerDict { data: vout }
+        SerDict { data, bis: used_verbs.iter().cloned().collect() }
     }
 }
 
 pub struct Context {
     pub rt: StdRuntime,
-    dict: Dict,
+    pub dict: Dict,
 }
 
 impl Context {
@@ -126,21 +132,21 @@ impl Context {
         self.dict.serialize()
     }
 
-    pub fn step(&mut self) -> Result<StepResult<BuiltinToken>, Error> {
+    pub fn step(&mut self) -> Result<StepResult<BuiltinToken, String>, Error> {
         self.rt.step()
     }
 
-        pub fn data_stack(&self) -> &StdVecStack<i32> {
-            &self.rt.data_stk
-        }
+    pub fn data_stack(&self) -> &StdVecStack<i32> {
+        &self.rt.data_stk
+    }
 
-        pub fn return_stack(&self) -> &StdVecStack<i32> {
-            &self.rt.ret_stk
-        }
+    pub fn return_stack(&self) -> &StdVecStack<i32> {
+        &self.rt.ret_stk
+    }
 
-        pub fn flow_stack(&self) -> &StdVecStack<RuntimeSeqCtx<BuiltinToken, StdFuncSeq>> {
-            &self.rt.flow_stk
-        }
+    pub fn flow_stack(&self) -> &StdVecStack<RuntimeWord<BuiltinToken, String>> {
+        &self.rt.flow_stk
+    }
 
     pub fn with_builtins(bi: &[(&'static str, fn(&mut StdRuntime) -> Result<(), Error>)]) -> Self {
         let mut new = Context {
@@ -149,12 +155,9 @@ impl Context {
         };
 
         for (word, func) in bi {
-            new.dict.data.insert(
+            new.dict.bis.insert(
                 word.to_string(),
-                NamedStdRuntimeWord {
-                    word: RuntimeWord::Verb(BuiltinToken::new(*func)),
-                    name: word.to_string(),
-                },
+                BuiltinToken::new(*func),
             );
         }
 
@@ -310,9 +313,14 @@ fn compile(
 
             // Now, check for "normal" words, e.g. numeric literals or dictionary words
             other => {
-                if let Some(dword) = ctxt.dict.data.get(other).cloned() {
+                if let Some(bi) = ctxt.dict.bis.get(other).cloned() {
                     NamedStdRuntimeWord {
-                        word: dword.word,
+                        name: other.to_string(),
+                        word: RuntimeWord::Verb(bi.clone()),
+                    }
+                } else if ctxt.dict.data.contains_key(other) {
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(other.to_string())),
                         name: other.to_string(),
                     }
                 } else if let Some(num) = parse_num(other) {
@@ -355,18 +363,25 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
             let compiled = Arc::new(compile(ctxt, relevant)?);
 
             ctxt.dict.data.insert(
-                name.clone(),
-                NamedStdRuntimeWord {
-                    name: name.clone(),
-                    word: RuntimeWord::VerbSeq(StdFuncSeq { inner: compiled }),
-                }
+                name,
+                StdFuncSeq { inner: compiled },
             );
         }
         _ => {
             // We should interpret this as a line to compile and run
             // (but then discard, because it isn't bound in the dict)
-            let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner: Arc::new(compile(ctxt, &data)?) });
-            ctxt.push_exec(temp_compiled);
+            // let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner:  });
+            if !data.is_empty() {
+                let name = format!("__{}", ctxt.dict.shame_idx);
+                let comp = compile(ctxt, &data)?;
+                ctxt.dict.data.insert(
+                    name.clone(),
+                    StdFuncSeq { inner: Arc::new(comp) },
+                );
+                ctxt.dict.shame_idx += 1;
+                let temp_compiled = RuntimeWord::VerbSeq(VerbSeqInner::from_word(name));
+                ctxt.push_exec(temp_compiled);
+            }
         }
     }
 

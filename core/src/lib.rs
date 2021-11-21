@@ -8,7 +8,6 @@ pub mod builtins;
 pub mod std_rt;
 
 pub mod nostd_rt;
-pub mod tokendict;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -69,8 +68,8 @@ pub struct VerbSeqInner<SeqTok>
 where
     SeqTok: Clone,
 {
-    tok: SeqTok,
-    idx: usize,
+    pub tok: SeqTok,
+    pub idx: usize,
 }
 
 impl<SeqTok> VerbSeqInner<SeqTok>
@@ -79,7 +78,7 @@ where
 {
     pub fn from_word(tok: SeqTok) -> Self {
         Self {
-            tok: tok,
+            tok,
             idx: 0,
         }
     }
@@ -141,9 +140,9 @@ where
         match self.step_inner() {
             Ok(r) => Ok(r),
             Err(e) => {
-                while let Ok(_) = self.flow_stk.pop() {}
-                while let Ok(_) = self.data_stk.pop() {}
-                while let Ok(_) = self.ret_stk.pop() {}
+                while self.flow_stk.pop().is_ok() {}
+                while self.data_stk.pop().is_ok() {}
+                while self.ret_stk.pop().is_ok() {}
                 Err(e)
             }
         }

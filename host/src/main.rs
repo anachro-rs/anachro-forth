@@ -2,7 +2,7 @@ use anachro_forth_host::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
-use anachro_forth_core::{Error, StepResult};
+use anachro_forth_core::{Error, StepResult, WhichToken};
 use anachro_forth_host::Context;
 use anachro_forth_core::std_rt::std_builtins;
 
@@ -16,8 +16,24 @@ fn main() -> Result<(), Error> {
         evaluate(&mut ctxt, input)?;
         let is_ok = loop {
             match ctxt.step() {
-                Ok(StepResult::Working(f)) => {
-                    f.exec(&mut ctxt.rt)?;
+                Ok(StepResult::Working(WhichToken::Single(ft))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    ft.exec(&mut ctxt.rt).unwrap();
+                }
+                Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+
+                    let c = ctxt.dict.data
+                        .get(&rtw.tok)
+                        .and_then(|n| n.inner.get(rtw.idx))
+                        .map(|n| n.clone().word);
+
+                    ctxt.rt.provide_seq_tok(c).unwrap();
+
                 }
                 Ok(StepResult::Done) => break true,
                 Err(e) => {
@@ -26,6 +42,7 @@ fn main() -> Result<(), Error> {
                 }
             }
         };
+        ctxt.dict.data.retain(|k, _| !k.starts_with("__"));
         let ser = ctxt.serialize();
         println!("{:?}", ser);
         let pcser = postcard::to_stdvec(&ser).unwrap();

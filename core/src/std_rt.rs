@@ -93,7 +93,7 @@ pub struct StdFuncSeq {
 }
 
 
-pub type StdRuntimeWord = RuntimeWord<BuiltinToken, StdFuncSeq>;
+pub type StdRuntimeWord = RuntimeWord<BuiltinToken, String>;
 
 type Builtin = fn(&mut StdRuntime) -> Result<(), Error>;
 
