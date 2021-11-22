@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 use std::sync::Arc;
 
 use crate::{
@@ -52,161 +52,23 @@ pub struct Context {
 }
 
 impl Context {
-    fn compile(&mut self, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
-        let mut output: Vec<NamedStdRuntimeWord> = Vec::new();
 
-        let lowered = data
-            .iter()
-            .map(String::as_str)
-            .map(str::to_lowercase)
-            .collect::<Vec<_>>();
-        let mut if_ct = 0;
-        let mut else_ct = 0;
-        let mut then_ct = 0;
-        let mut do_ct = 0;
-        let mut loop_ct = 0;
 
-        for (idx, d) in lowered.iter().enumerate() {
-            let comp = match d.as_str() {
-                // First, check for any "Magical" words that do not appear in the dictionary, and need to
-                // be handled in a special way
-                "if" => {
-                    // Seek forward to find the then/else
-                    let offset = lowered
-                        .iter()
-                        .skip(idx)
-                        .position(|w| ["then", "else"].contains(&w.as_str()))
-                        .ok_or(Error::MissingIfPair)?;
+    #[allow(dead_code)]
+    fn compile2(&mut self, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
+        let mut vd_data: VecDeque<String> = data.iter().map(String::as_str).map(str::to_lowercase).collect();
 
-                    if_ct += 1;
+        let munched = muncher(&mut vd_data);
+        println!("{:?}", munched);
+        assert!(vd_data.is_empty());
 
-                    let offset = match lowered[idx + offset].as_str() {
-                        // We have to compensate that "then" doesn't actually
-                        // appear in the compiled output
-                        "then" => offset - 1,
-
-                        // Here, there is no "then", but we do have to compensate
-                        // for the unconditional jump that appears where else appears
-                        "else" => offset,
-
-                        _ => return Err(Error::InternalError),
-                    } as i32;
-
-                    NamedStdRuntimeWord {
-                        word: RuntimeWord::CondRelativeJump {
-                            offset,
-                            jump_on: false,
-                        },
-                        name: "CRJ".into(),
-                    }
-                }
-                "else" => {
-                    // All we need to do on an else is insert an unconditional jump to the then.
-                    let offset = lowered
-                        .iter()
-                        .skip(idx)
-                        .position(|w| w == "then")
-                        .ok_or(Error::MissingElsePair)?;
-
-                    // Note: Balance check handled later
-                    else_ct += 1;
-
-                    // We have to compensate that "then" doesn't actually
-                    // appear in the compiled output
-                    let offset = offset as i32 - 1;
-
-                    NamedStdRuntimeWord {
-                        word: RuntimeWord::UncondRelativeJump { offset },
-                        name: "UCRJ".into(),
-                    }
-                }
-                "then" => {
-                    then_ct += 1;
-                    // For now, we only using 'then' as a sentinel value for if/else
-                    continue;
-                }
-                "do" => {
-                    output.push(NamedStdRuntimeWord {
-                        word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
-                        name: ">r".into(),
-                    });
-                    output.push(NamedStdRuntimeWord {
-                        word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
-                        name: ">r".into(),
-                    });
-                    do_ct += 1;
-                    continue;
-                }
-                "loop" => {
-                    output.push(NamedStdRuntimeWord {
-                        word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_priv_loop)),
-                        name: "PRIV_LOOP".into(),
-                    });
-
-                    let mut count: usize = do_ct - loop_ct;
-                    let offset = lowered[..idx]
-                        .iter()
-                        .rev()
-                        .position(|w| {
-                            if w == "do" {
-                                if let Some(amt) = count.checked_sub(1) {
-                                    count = amt;
-                                } else {
-                                    return false;
-                                }
-                            }
-
-                            count == 0
-                        })
-                        .ok_or(Error::MissingLoopPair)?;
-
-                    loop_ct += 1;
-
-                    NamedStdRuntimeWord {
-                        word: RuntimeWord::CondRelativeJump {
-                            offset: (-1i32 * offset as i32) - 2,
-                            jump_on: false,
-                        },
-                        name: "CRJ".into(),
-                    }
-                }
-
-                // Now, check for "normal" words, e.g. numeric literals or dictionary words
-                other => {
-                    if let Some(bi) = self.dict.bis.get(other).cloned() {
-                        NamedStdRuntimeWord {
-                            name: other.to_string(),
-                            word: RuntimeWord::Verb(bi.clone()),
-                        }
-                    } else if self.dict.data.contains_key(other) {
-                        NamedStdRuntimeWord {
-                            word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(other.to_string())),
-                            name: other.to_string(),
-                        }
-                    } else if let Some(num) = parse_num(other) {
-                        NamedStdRuntimeWord {
-                            word: RuntimeWord::LiteralVal(num),
-                            name: format!("LIT({})", num),
-                        }
-                    } else {
-                        return Err(Error::InternalError);
-                    }
-                }
-            };
-
-            output.push(comp);
+        let conv: Vec<NamedStdRuntimeWord> = munched.into_iter().map(|m| m.to_named_rt_words(&mut self.dict)).flatten().collect();
+        for c in conv.iter() {
+            print!("{}, ", c.name);
         }
+        println!();
 
-        // TODO: This probably isn't SUPER robust, but for now is a decent sanity check
-        // that we have properly paired if/then/elses
-        if if_ct != then_ct {
-            return Err(Error::InternalError);
-        }
-        if else_ct > if_ct {
-            return Err(Error::InternalError);
-        }
-
-        Ok(output)
+        Ok(conv)
     }
 
     pub fn evaluate(&mut self, data: Vec<String>) -> Result<(), Error> {
@@ -220,7 +82,8 @@ impl Context {
                 // TODO: Doesn't handle "empty" definitions
                 let relevant = &data[2..][..data.len() - 3];
 
-                let compiled = Arc::new(self.compile(relevant)?);
+                // let compiled = Arc::new(self.compile(relevant)?);
+                let compiled = Arc::new(self.compile2(relevant).unwrap());
 
                 self.dict.data.insert(name, StdFuncSeq { inner: compiled });
             }
@@ -230,7 +93,8 @@ impl Context {
                 // let temp_compiled = RuntimeWord::VerbSeq(StdFuncSeq { inner:  });
                 if !data.is_empty() {
                     let name = format!("__{}", self.dict.shame_idx);
-                    let comp = self.compile(&data)?;
+                    // let comp = self.compile(&data)?;
+                    let comp = self.compile2(&data).unwrap();
                     self.dict.data.insert(
                         name.clone(),
                         StdFuncSeq {
@@ -301,4 +165,246 @@ impl Context {
 // for one way of doing this!
 fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
+}
+
+
+/// This struct represents a "chunk" of the AST
+#[derive(Debug)]
+enum Chunk {
+    IfThen {
+        if_body: Vec<Chunk>,
+    },
+    IfElseThen {
+        if_body: Vec<Chunk>,
+        else_body: Vec<Chunk>,
+    },
+    DoLoop {
+        do_body: Vec<Chunk>,
+    },
+    Token(String),
+}
+
+impl Chunk {
+    /// Convert a chunk of AST words into a vec of `NamedStdRuntimeWord`s
+    fn to_named_rt_words(self, dict: &mut Dict) -> Vec<NamedStdRuntimeWord> {
+        let mut ret = vec![];
+
+        match self {
+            Chunk::IfThen { if_body } => {
+                // First, convert the body into a sequence
+                let mut conv: VecDeque<NamedStdRuntimeWord> = if_body
+                    .into_iter()
+                    .map(|m| m.to_named_rt_words(dict))
+                    .flatten()
+                    .collect();
+
+                conv.push_front(NamedStdRuntimeWord {
+                    name: "CRJ".into(),
+                    word: RuntimeWord::CondRelativeJump { offset: conv.len() as i32, jump_on: false },
+                });
+
+                let conv: Vec<NamedStdRuntimeWord> = conv.into_iter().collect();
+                ret.extend(conv);
+            },
+            Chunk::IfElseThen { if_body, else_body } => {
+                let mut if_conv: VecDeque<NamedStdRuntimeWord> = if_body
+                    .into_iter()
+                    .map(|m| m.to_named_rt_words(dict))
+                    .flatten()
+                    .collect();
+
+                let else_conv: Vec<NamedStdRuntimeWord> = else_body
+                    .into_iter()
+                    .map(|m| m.to_named_rt_words(dict))
+                    .flatten()
+                    .collect();
+
+                if_conv.push_back(NamedStdRuntimeWord {
+                    name: "UCRJ".into(),
+                    word: RuntimeWord::UncondRelativeJump { offset: else_conv.len() as i32 },
+                });
+
+                if_conv.push_front(NamedStdRuntimeWord {
+                    name: "CRJ".into(),
+                    word: RuntimeWord::CondRelativeJump { offset: if_conv.len() as i32, jump_on: false },
+                });
+
+                let conv: Vec<NamedStdRuntimeWord> = if_conv.into_iter().chain(else_conv.into_iter()).collect();
+                ret.extend(conv);
+            },
+            Chunk::DoLoop { do_body } => {
+                // First, convert the body into a sequence
+                let mut conv: VecDeque<NamedStdRuntimeWord> = do_body
+                    .into_iter()
+                    .map(|m| m.to_named_rt_words(dict))
+                    .flatten()
+                    .collect();
+
+                conv.push_back(NamedStdRuntimeWord {
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_priv_loop)),
+                    name: "PRIV_LOOP".into(),
+                });
+
+                let len = conv.len();
+
+                conv.push_front(NamedStdRuntimeWord {
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
+                    name: ">r".into(),
+                });
+                conv.push_front(NamedStdRuntimeWord {
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
+                    name: ">r".into(),
+                });
+
+                // The Minus One here accounts for the addition of the CRJ. We should not loop back to
+                // the double `>r`s, as those only happen once at the top of the loop.
+                conv.push_back(NamedStdRuntimeWord {
+                    word: RuntimeWord::CondRelativeJump { offset: -1 * len as i32 - 1, jump_on: false },
+                    name: "CRJ".into(),
+                });
+
+                let conv: Vec<NamedStdRuntimeWord> = conv.into_iter().collect();
+                ret.extend(conv);
+            },
+            Chunk::Token(tok) => {
+                ret.push(if let Some(bi) = dict.bis.get(&tok).cloned() {
+                    NamedStdRuntimeWord {
+                        name: tok,
+                        word: RuntimeWord::Verb(bi.clone()),
+                    }
+                } else if dict.data.contains_key(&tok) {
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(tok.clone())),
+                        name: tok,
+                    }
+                } else if let Some(num) = parse_num(&tok) {
+                    NamedStdRuntimeWord {
+                        word: RuntimeWord::LiteralVal(num),
+                        name: format!("LIT({})", num),
+                    }
+                } else {
+                    panic!()
+                    // return Err(Error::InternalError);
+                });
+            },
+        }
+
+        ret
+    }
+}
+
+use std::collections::VecDeque;
+
+fn muncher(data: &mut VecDeque<String>) -> Vec<Chunk> {
+    let mut chunks = vec![];
+    loop {
+        let next = if let Some(t) = data.pop_front() {
+            t
+        } else {
+            break;
+        };
+
+        match next.as_str() {
+            "do" => {
+                chunks.push(munch_do(data));
+            }
+            "if" => {
+                chunks.push(munch_if(data));
+            }
+            _ => chunks.push(Chunk::Token(next)),
+        }
+    }
+
+    chunks
+}
+
+fn munch_do(data: &mut VecDeque<String>) -> Chunk {
+    let mut chunks = vec![];
+    loop {
+        let next = if let Some(t) = data.pop_front() {
+            t
+        } else {
+            break;
+        };
+
+        match next.as_str() {
+            "do" => {
+                chunks.push(munch_do(data));
+            }
+            "if" => {
+                chunks.push(munch_if(data));
+            }
+            "loop" => {
+                return Chunk::DoLoop {
+                    do_body: chunks,
+                }
+            }
+            _ => chunks.push(Chunk::Token(next)),
+        }
+    }
+
+    // We... shouldn't get here. This means we never found our "loop" after the "do"
+    todo!()
+}
+
+fn munch_if(data: &mut VecDeque<String>) -> Chunk {
+    let mut chunks = vec![];
+    loop {
+        let next = if let Some(t) = data.pop_front() {
+            t
+        } else {
+            break;
+        };
+
+        match next.as_str() {
+            "do" => {
+                chunks.push(munch_do(data));
+            }
+            "if" => {
+                chunks.push(munch_if(data));
+            }
+            "then" => {
+                return Chunk::IfThen {
+                    if_body: chunks,
+                }
+            }
+            "else" => {
+                return munch_else(data, chunks);
+            }
+            _ => chunks.push(Chunk::Token(next)),
+        }
+    }
+
+    // We... shouldn't get here. This means we never found our "then"/"else" after the "if"
+    todo!()
+}
+
+fn munch_else(data: &mut VecDeque<String>, if_body: Vec<Chunk>) -> Chunk {
+    let mut chunks = vec![];
+    loop {
+        let next = if let Some(t) = data.pop_front() {
+            t
+        } else {
+            break;
+        };
+
+        match next.as_str() {
+            "do" => {
+                chunks.push(munch_do(data));
+            }
+            "if" => {
+                chunks.push(munch_if(data));
+            }
+            "then" => {
+                return Chunk::IfElseThen {
+                    if_body,
+                    else_body: chunks,
+                }
+            }
+            _ => chunks.push(Chunk::Token(next)),
+        }
+    }
+
+    // We... shouldn't get here. This means we never found our "then" after the "else"
+    todo!()
 }

@@ -103,7 +103,8 @@ mod test {
         assert_eq!(out, "*");
     }
 
-    #[test]
+    // #[test]
+    #[allow(dead_code)]
     fn roundtrip2() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
@@ -132,9 +133,7 @@ mod test {
         let serdict = ctxt.serialize();
         println!("{:?}", serdict);
 
-        let mut ser = postcard::to_stdvec_cobs(&serdict).unwrap();
+        let ser = postcard::to_stdvec_cobs(&serdict).unwrap();
         println!("{:?}", ser);
-
-        panic!();
     }
 }

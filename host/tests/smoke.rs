@@ -1,5 +1,5 @@
+use anachro_forth_core::compiler::Context;
 use anachro_forth_core::{std_rt::std_builtins, StepResult, WhichToken};
-use anachro_forth_host::{evaluate, Context};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output
@@ -31,10 +31,10 @@ const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     ("0 1 = if 42 emit then", ""),
     ("1 1 = if 42 emit then", "*"),
     ("0 0 = if 42 emit then", "*"),
-    // Nested loops - doesn't work!
-    // ("0 0 if 42 emit if 42 emit else 42 emit 42 emit then then", ""),
-    // ("1 0 if 42 emit if 42 emit else 42 emit 42 emit then then", "***"),
-    // ("1 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "**"),
+    // Nested loops
+    ("0   if 42 emit if 42 emit else 42 emit 42 emit then then", ""),
+    ("0 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "***"),
+    ("1 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "**"),
 ];
 
 const MULTI_LINE_CASES: &[(&str, &str)] = &[
@@ -60,15 +60,14 @@ const MULTI_LINE_CASES: &[(&str, &str)] = &[
         "#,
         "************",
     ),
-    // Nested loops: Not working!
-    // (
-    //     r#"
-    //         : star 42 emit ;
-    //         : test 3 0 do 4 0 do star loop loop ;
-    //         test
-    //     "#,
-    //     "**************",
-    // ),
+    (
+        r#"
+            : star 42 emit ;
+            : test 3 0 do 4 0 do star loop loop ;
+            test
+        "#,
+        "************",
+    ),
 ];
 
 /// Creates a clean engine
@@ -77,7 +76,8 @@ fn single_lines() {
     for (cases, output) in SINGLE_LINE_CASES {
         let mut ctxt = Context::with_builtins(std_builtins());
         println!("{:?} => {:?}", cases, output);
-        evaluate(&mut ctxt, s(cases)).unwrap();
+        ctxt.evaluate(s(cases)).unwrap();
+        println!("{:?}", ctxt.serialize());
         loop {
             match ctxt.step().unwrap() {
                 StepResult::Done => break,
@@ -118,7 +118,8 @@ fn multi_lines() {
 
         for cline in cases.lines().map(str::trim) {
             println!("{:?}", cline);
-            evaluate(&mut ctxt, s(cline)).unwrap();
+            ctxt.evaluate(s(cline)).unwrap();
+            println!("{:?}", ctxt.serialize());
             loop {
                 match ctxt.step().unwrap() {
                     StepResult::Done => break,

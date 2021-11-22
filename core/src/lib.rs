@@ -67,7 +67,7 @@ where
     Ref(VerbSeqInner<SeqTok>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VerbSeqInner<SeqTok>
 where
     SeqTok: Clone,
