@@ -1,9 +1,11 @@
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::Runtime;
 use crate::RuntimeWord;
 use crate::{Error, ExecutionStack, Stack};
+use crate::ser_de::SerWord;
 
 #[derive(Debug)]
 pub struct StdVecStack<T> {
@@ -129,4 +131,69 @@ pub fn std_builtins() -> &'static [(&'static str, fn(&mut StdRuntime) -> Result<
         ("dup", crate::builtins::bi_dup),
         ("+", crate::builtins::bi_add),
     ]
+}
+
+
+pub struct SerContext {
+    pub bis: Vec<String>,
+    pub seqs: Vec<String>,
+}
+
+impl SerContext {
+    pub fn new() -> Self {
+        Self {
+            bis: Vec::new(),
+            seqs: Vec::new(),
+        }
+    }
+
+    pub fn encode_rtw(&mut self, word: &NamedStdRuntimeWord) -> SerWord {
+        match &word.word {
+            RuntimeWord::LiteralVal(lit) => SerWord::LiteralVal(*lit),
+            RuntimeWord::Verb(_) => {
+                let idx = self.intern_bis(&word.name);
+                SerWord::Verb(idx)
+            },
+            RuntimeWord::VerbSeq(seq) => {
+                let idx = self.intern_seq(&seq.tok);
+                SerWord::VerbSeq(idx)
+            },
+            RuntimeWord::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
+            RuntimeWord::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+        }
+    }
+
+    pub fn intern_bis(&mut self, word: &str) -> u16 {
+        if let Some(pos) = self.bis.iter().position(|w| word == w) {
+            pos
+        } else {
+            self.bis.push(word.to_string());
+            self.bis.len() - 1
+        }.try_into().unwrap()
+    }
+
+    pub fn intern_seq(&mut self, word: &str) -> u16 {
+        if let Some(pos) = self.seqs.iter().position(|w| word == w) {
+            pos
+        } else {
+            self.seqs.push(word.to_string());
+            self.seqs.len() - 1
+        }.try_into().unwrap()
+    }
+}
+
+// TODO: Make a method of NamedStdRuntimeWord
+pub fn ser_srw(ctxt: &mut SerContext, name: &str, words: &StdFuncSeq) -> Vec<SerWord> {
+    let mut out = vec![];
+
+    for word in words.inner.iter() {
+        let new = ctxt.encode_rtw(word);
+        out.push(new);
+    }
+
+    // Ensure that the currently encoded word makes it into
+    // the list of interned words
+    let _ = ctxt.intern_seq(name);
+
+    out
 }

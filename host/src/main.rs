@@ -1,9 +1,9 @@
-use anachro_forth_host::evaluate;
+use anachro_forth_core::compiler::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
 use anachro_forth_core::{Error, StepResult, WhichToken};
-use anachro_forth_host::Context;
+use anachro_forth_core::compiler::Context;
 use anachro_forth_core::std_rt::std_builtins;
 
 fn main() -> Result<(), Error> {

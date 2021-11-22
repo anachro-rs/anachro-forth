@@ -16,6 +16,8 @@ name = "anachro-forth-core"
 version = "0.1.0"
 dependencies = [
  "heapless",
+ "postcard",
+ "serde",
 ]
 
 [[package]]

@@ -3,9 +3,13 @@
 use core::{fmt::Write, marker::PhantomData};
 
 pub mod builtins;
+pub mod ser_de;
 
 #[cfg(any(test, feature = "std"))]
 pub mod std_rt;
+
+#[cfg(any(test, feature = "std"))]
+pub mod compiler;
 
 pub mod nostd_rt;
 
