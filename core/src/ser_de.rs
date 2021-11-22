@@ -104,4 +104,41 @@ mod test {
         let out = ns_ctxt.rt.exchange_output();
         assert_eq!(out, "*");
     }
+
+    #[test]
+    fn roundtrip2() {
+        let mut ctxt = Context::with_builtins(std_builtins());
+
+        evaluate(
+            &mut ctxt,
+            vec![
+            ":".into(),
+            "nop".into(),
+            ";".into(),
+            ])
+        .unwrap();
+
+        evaluate(
+            &mut ctxt,
+            vec![
+                ":".into(),
+                "test".into(),
+                "1000000".into(),
+                "0".into(),
+                "do".into(),
+                "nop".into(),
+                "loop".into(),
+                ";".into(),
+            ],
+        )
+        .unwrap();
+
+        let serdict = ctxt.serialize();
+        println!("{:?}", serdict);
+
+        let mut ser = postcard::to_stdvec_cobs(&serdict).unwrap();
+        println!("{:?}", ser);
+
+        panic!();
+    }
 }

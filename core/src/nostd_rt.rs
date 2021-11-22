@@ -231,5 +231,6 @@ pub fn nostd_builtins<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_S
         (">", crate::builtins::bi_gt),
         ("dup", crate::builtins::bi_dup),
         ("+", crate::builtins::bi_add),
+        ("PRIV_LOOP", crate::builtins::bi_priv_loop),
     ]
 }

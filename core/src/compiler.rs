@@ -267,7 +267,7 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
     match (data.first(), data.last()) {
         (Some(f), Some(l)) if f == ":" && l == ";" => {
             // Must have ":", "$NAME", "$SOMETHING+", ";"
-            assert!(data.len() >= 4);
+            assert!(data.len() >= 3);
 
             let name = data[1].to_lowercase();
 
