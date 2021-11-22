@@ -1,4 +1,3 @@
-use anachro_forth_core::compiler::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
@@ -11,7 +10,7 @@ fn main() -> Result<(), Error> {
 
     loop {
         let input = read().map_err(|_| Error::Input)?;
-        evaluate(&mut ctxt, input)?;
+        ctxt.evaluate(input)?;
         let is_ok = loop {
             match ctxt.step() {
                 Ok(StepResult::Working(WhichToken::Single(ft))) => {

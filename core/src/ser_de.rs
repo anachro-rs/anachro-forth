@@ -27,7 +27,7 @@ pub struct SerDictFixed<'a, const SEQS_CT: usize, const SEQ_SZ: usize, const BIS
 
 #[cfg(test)]
 mod test {
-    use crate::compiler::{evaluate, Context};
+    use crate::compiler::Context;
     use crate::nostd_rt::NoStdContext;
     use crate::ser_de::SerDictFixed;
     use crate::std_rt::std_builtins;
@@ -37,8 +37,7 @@ mod test {
     fn roundtrip() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
-        evaluate(
-            &mut ctxt,
+        ctxt.evaluate(
             vec![
                 ":".into(),
                 "star".into(),
@@ -49,8 +48,7 @@ mod test {
         )
         .unwrap();
 
-        evaluate(
-            &mut ctxt,
+        ctxt.evaluate(
             vec![
                 ":".into(),
                 "mstar".into(),
@@ -109,8 +107,7 @@ mod test {
     fn roundtrip2() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
-        evaluate(
-            &mut ctxt,
+        ctxt.evaluate(
             vec![
             ":".into(),
             "nop".into(),
@@ -118,8 +115,7 @@ mod test {
             ])
         .unwrap();
 
-        evaluate(
-            &mut ctxt,
+        ctxt.evaluate(
             vec![
                 ":".into(),
                 "test".into(),
