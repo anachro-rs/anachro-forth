@@ -45,9 +45,20 @@ fn main() -> Result<(), Error> {
         ctxt.dict.data.retain(|k, _| !k.starts_with("__"));
         let ser = ctxt.serialize();
         println!("{:?}", ser);
+
         let pcser = postcard::to_stdvec(&ser).unwrap();
-        println!("{:02X?}", pcser);
-        println!("{}", pcser.len());
+        // println!("{:02X?}", pcser);
+
+        let mut zc = rzcobs::encode(&pcser);
+        zc.push(0);
+        println!("{:02X?}", zc);
+
+        let mut rler = kolben::rlercobs::encode(&pcser);
+        rler.push(0);
+        // println!("{:02X?}", rler);
+
+        println!("{}, {}, {}", pcser.len(), zc.len(), rler.len());
+
         print(&mut ctxt, is_ok);
     }
 }

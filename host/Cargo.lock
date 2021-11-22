@@ -23,7 +23,9 @@ name = "anachro-forth-host"
 version = "0.1.0"
 dependencies = [
  "anachro-forth-core",
+ "kolben",
  "postcard",
+ "rzcobs",
  "serde",
  "termion",
  "tui",
@@ -147,6 +149,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kolben"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f10c20b5bb7daebf79b3d5aa65dad7d48fa8f4b9aa7c0650b96b9ba0f97d9da"
+dependencies = [
+ "postcard-cobs",
+ "rcobs",
+ "rzcobs",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -230,6 +243,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcobs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06cdc4ce376f8155e90aa043d76cd40ecd11b2ec4bb4dea713194683ae01a252"
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -293,6 +312,12 @@ checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
  "semver",
 ]
+
+[[package]]
+name = "rzcobs"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af5759e4bc4858ce928073d0ebe29c82d18c04a0023bf2f312500a412f23939"
 
 [[package]]
 name = "scopeguard"

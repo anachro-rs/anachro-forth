@@ -10,6 +10,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 tui = "0.16.0"
 termion = "1.5.6"
+rzcobs = "0.1.2"
+kolben = "0.0.3"
 
 [dependencies.anachro-forth-core]
 path = "../core"

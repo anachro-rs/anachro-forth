@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::sync::Arc;
 use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
@@ -12,28 +13,72 @@ use afc::{std_rt::StdRuntime, Error};
 #[derive(Debug, Serialize, Clone)]
 pub enum SerWord {
     LiteralVal(i32),
-    Verb(String),
-    VerbSeq(String),
+    Verb(u16),
+    VerbSeq(u16),
     UncondRelativeJump { offset: i32 },
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
-// TODO: Make a method of NamedStdRuntimeWord
-fn ser_srw(words: &StdFuncSeq) -> Vec<SerWord> {
-    let mut out = vec![];
+struct SerContext {
+    bis: Vec<String>,
+    seqs: Vec<String>,
+}
 
-    for word in words.inner.iter() {
-        let new = match &word.word {
+impl SerContext {
+    fn new() -> Self {
+        Self {
+            bis: Vec::new(),
+            seqs: Vec::new(),
+        }
+    }
+
+    fn encode_rtw(&mut self, word: &NamedStdRuntimeWord) -> SerWord {
+        match &word.word {
             RuntimeWord::LiteralVal(lit) => SerWord::LiteralVal(*lit),
-            RuntimeWord::Verb(_) => SerWord::Verb(word.name.clone()),
+            RuntimeWord::Verb(_) => {
+                let idx = self.intern_bis(&word.name);
+                SerWord::Verb(idx)
+            },
             RuntimeWord::VerbSeq(seq) => {
-                SerWord::VerbSeq(seq.tok.clone())
+                let idx = self.intern_seq(&seq.tok);
+                SerWord::VerbSeq(idx)
             },
             RuntimeWord::UncondRelativeJump { offset } => SerWord::UncondRelativeJump { offset: *offset },
             RuntimeWord::CondRelativeJump { offset, jump_on } => SerWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
-        };
+        }
+    }
+
+    fn intern_bis(&mut self, word: &str) -> u16 {
+        if let Some(pos) = self.bis.iter().position(|w| word == w) {
+            pos
+        } else {
+            self.bis.push(word.to_string());
+            self.bis.len() - 1
+        }.try_into().unwrap()
+    }
+
+    fn intern_seq(&mut self, word: &str) -> u16 {
+        if let Some(pos) = self.seqs.iter().position(|w| word == w) {
+            pos
+        } else {
+            self.seqs.push(word.to_string());
+            self.seqs.len() - 1
+        }.try_into().unwrap()
+    }
+}
+
+// TODO: Make a method of NamedStdRuntimeWord
+fn ser_srw(ctxt: &mut SerContext, name: &str, words: &StdFuncSeq) -> Vec<SerWord> {
+    let mut out = vec![];
+
+    for word in words.inner.iter() {
+        let new = ctxt.encode_rtw(word);
         out.push(new);
     }
+
+    // Ensure that the currently encoded word makes it into
+    // the list of interned words
+    let _ = ctxt.intern_seq(name);
 
     out
 }
@@ -47,7 +92,7 @@ pub struct Dict {
 
 #[derive(Debug, Serialize)]
 pub struct SerDict {
-    data: Vec<(String, Vec<SerWord>)>,
+    data: Vec<Vec<SerWord>>,
     bis: Vec<String>,
 }
 
@@ -62,63 +107,19 @@ impl Dict {
 
     pub fn serialize(&self) -> SerDict {
         let mut out: BTreeMap<String, Vec<SerWord>> = BTreeMap::new();
+        let mut ctxt = SerContext::new();
 
         for (word, val) in self.data.iter() {
-            out.insert(word.clone(), ser_srw(val));
+            out.insert(word.to_string(), ser_srw(&mut ctxt, &word, val));
             // println!("UHOH: {}", word);
         }
 
-        println!("{:?}", out);
-
-        let mut all_verbs: BTreeSet<String> = BTreeSet::new();
-        let mut used_verbs: BTreeSet<String> = BTreeSet::new();
-
-        for (name, _) in std_builtins() {
-            all_verbs.insert(name.to_string());
+        let mut data = Vec::new();
+        for word in ctxt.seqs {
+            data.push(out.get(&word).unwrap().clone());
         }
 
-        let mut vout: BTreeSet<String> = BTreeSet::new();
-        let mut data: Vec<(String, Vec<SerWord>)> = vec![];
-
-        // This is to ensure that items are serialized in the necessary order,
-        // e.g. if `mstar` calls `star`, `star` is guaranteed to be serialized
-        // first in order.
-
-        // This MAY not be necessary, depending on how I do the deserialization,
-        // with two passes, it's likely it doesn't matter
-        while !out.is_empty() {
-            let nowt = out.clone();
-
-            'seqs: for (k, v) in nowt.iter() {
-                'seqelem: for val in v {
-                    match val {
-                        SerWord::LiteralVal(_) => continue 'seqelem,
-                        SerWord::Verb(sw) => {
-                            if all_verbs.contains(sw) {
-                                used_verbs.insert(sw.to_string());
-                            } else {
-                                panic!()
-                            }
-                        }
-                        SerWord::VerbSeq(vs) => {
-                            if vout.contains(vs) {
-                                continue 'seqelem;
-                            } else {
-                                continue 'seqs;
-                            }
-                        },
-                        SerWord::UncondRelativeJump { .. } => continue 'seqelem,
-                        SerWord::CondRelativeJump { .. } => continue 'seqelem,
-                    }
-                }
-
-                out.remove(k);
-                vout.insert(k.to_string());
-                data.push((k.to_string(), v.clone()));
-            }
-        }
-
-        SerDict { data, bis: used_verbs.iter().cloned().collect() }
+        SerDict { data, bis: ctxt.bis }
     }
 }
 
