@@ -1,12 +1,12 @@
 use core::marker::PhantomData;
 
+use crate::ser_de::SerDictFixed;
+use crate::ser_de::SerWord;
+use crate::Runtime;
+use crate::RuntimeWord;
 use crate::StepResult;
 use crate::VerbSeqInner;
 use crate::WhichToken;
-use crate::ser_de::SerDictFixed;
-use crate::Runtime;
-use crate::RuntimeWord;
-use crate::ser_de::SerWord;
 use crate::{Error, ExecutionStack, Stack};
 
 use heapless::{String, Vec};
@@ -93,7 +93,8 @@ pub struct NoStdContext<
     const SEQ_SZ: usize,
 > {
     pub rt: NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>,
-    pub seq: Vec<Vec<RuntimeWord<BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>, usize>, SEQ_SZ>, SEQS_CT>,
+    pub seq:
+        Vec<Vec<RuntimeWord<BuiltinToken<DATA_SZ, FLOW_SZ, OUTBUF_SZ>, usize>, SEQ_SZ>, SEQS_CT>,
 }
 
 impl<
@@ -129,10 +130,22 @@ impl<
             for seqstp in seq.iter() {
                 let proc = match seqstp {
                     SerWord::LiteralVal(lit) => RuntimeWord::LiteralVal(*lit),
-                    SerWord::Verb(idx) => RuntimeWord::Verb(BuiltinToken { bi: bis[*idx as usize] }),
-                    SerWord::VerbSeq(idx) => RuntimeWord::VerbSeq(VerbSeqInner { tok: *idx as usize, idx: 0 }),
-                    SerWord::UncondRelativeJump { offset } => RuntimeWord::UncondRelativeJump { offset: *offset },
-                    SerWord::CondRelativeJump { offset, jump_on } => RuntimeWord::CondRelativeJump { offset: *offset, jump_on: *jump_on },
+                    SerWord::Verb(idx) => RuntimeWord::Verb(BuiltinToken {
+                        bi: bis[*idx as usize],
+                    }),
+                    SerWord::VerbSeq(idx) => RuntimeWord::VerbSeq(VerbSeqInner {
+                        tok: *idx as usize,
+                        idx: 0,
+                    }),
+                    SerWord::UncondRelativeJump { offset } => {
+                        RuntimeWord::UncondRelativeJump { offset: *offset }
+                    }
+                    SerWord::CondRelativeJump { offset, jump_on } => {
+                        RuntimeWord::CondRelativeJump {
+                            offset: *offset,
+                            jump_on: *jump_on,
+                        }
+                    }
                 };
                 seq_vec.push(proc).ok();
             }
@@ -140,10 +153,7 @@ impl<
             seqs_vec.push(seq_vec).ok();
         }
 
-        Self {
-            rt,
-            seq: seqs_vec,
-        }
+        Self { rt, seq: seqs_vec }
     }
 
     pub fn run_blocking(&mut self) -> Result<(), Error> {
@@ -160,13 +170,13 @@ impl<
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
 
-                    let c = self.seq
+                    let c = self
+                        .seq
                         .get(rtw.tok)
                         .and_then(|n| n.get(rtw.idx))
                         .map(|n| n.clone());
 
                     self.rt.provide_seq_tok(c).unwrap();
-
                 }
                 Ok(StepResult::Done) => break,
                 Err(e) => {

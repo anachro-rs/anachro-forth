@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use heapless::Vec as HVec;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum SerWord {
@@ -27,35 +27,43 @@ pub struct SerDictFixed<'a, const SEQS_CT: usize, const SEQ_SZ: usize, const BIS
 
 #[cfg(test)]
 mod test {
-    use crate::{RuntimeWord, VerbSeqInner};
+    use crate::compiler::{evaluate, Context};
     use crate::nostd_rt::NoStdContext;
     use crate::ser_de::SerDictFixed;
     use crate::std_rt::std_builtins;
-    use crate::compiler::{Context, evaluate};
+    use crate::{RuntimeWord, VerbSeqInner};
 
     #[test]
     fn roundtrip() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
-        evaluate(&mut ctxt, vec![
-            ":".into(),
-            "star".into(),
-            "42".into(),
-            "emit".into(),
-            ";".into(),
-        ]).unwrap();
+        evaluate(
+            &mut ctxt,
+            vec![
+                ":".into(),
+                "star".into(),
+                "42".into(),
+                "emit".into(),
+                ";".into(),
+            ],
+        )
+        .unwrap();
 
-        evaluate(&mut ctxt, vec![
-            ":".into(),
-            "mstar".into(),
-            "if".into(),
-            "star".into(),
-            "else".into(),
-            "star".into(),
-            "star".into(),
-            "then".into(),
-            ";".into(),
-        ]).unwrap();
+        evaluate(
+            &mut ctxt,
+            vec![
+                ":".into(),
+                "mstar".into(),
+                "if".into(),
+                "star".into(),
+                "else".into(),
+                "star".into(),
+                "star".into(),
+                "then".into(),
+                ";".into(),
+            ],
+        )
+        .unwrap();
 
         let serdict = ctxt.serialize();
         println!("{:?}", serdict);

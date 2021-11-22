@@ -1,10 +1,13 @@
-use std::sync::Arc;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::{
-    std_rt::{BuiltinToken, NamedStdRuntimeWord, SerContext, StdFuncSeq, StdRuntimeWord, StdVecStack, new_runtime, ser_srw, StdRuntime},
-    ser_de::{SerWord, SerDict},
-    RuntimeWord, StepResult, VerbSeqInner, Error,
+    ser_de::{SerDict, SerWord},
+    std_rt::{
+        new_runtime, ser_srw, BuiltinToken, NamedStdRuntimeWord, SerContext, StdFuncSeq,
+        StdRuntime, StdRuntimeWord, StdVecStack,
+    },
+    Error, RuntimeWord, StepResult, VerbSeqInner,
 };
 
 pub struct Dict {
@@ -36,7 +39,10 @@ impl Dict {
             data.push(out.get(&word).unwrap().clone());
         }
 
-        SerDict { data, bis: ctxt.bis }
+        SerDict {
+            data,
+            bis: ctxt.bis,
+        }
     }
 }
 
@@ -73,10 +79,9 @@ impl Context {
         };
 
         for (word, func) in bi {
-            new.dict.bis.insert(
-                word.to_string(),
-                BuiltinToken::new(*func),
-            );
+            new.dict
+                .bis
+                .insert(word.to_string(), BuiltinToken::new(*func));
         }
 
         new
@@ -101,10 +106,7 @@ fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
 
-fn compile(
-    ctxt: &mut Context,
-    data: &[String],
-) -> Result<Vec<NamedStdRuntimeWord>, Error> {
+fn compile(ctxt: &mut Context, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
     let mut output: Vec<NamedStdRuntimeWord> = Vec::new();
 
     let lowered = data
@@ -179,15 +181,11 @@ fn compile(
             }
             "do" => {
                 output.push(NamedStdRuntimeWord {
-                    word: RuntimeWord::Verb(BuiltinToken::new(
-                        crate::builtins::bi_retstk_push,
-                    )),
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
                     name: ">r".into(),
                 });
                 output.push(NamedStdRuntimeWord {
-                    word: RuntimeWord::Verb(BuiltinToken::new(
-                        crate::builtins::bi_retstk_push,
-                    )),
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_retstk_push)),
                     name: ">r".into(),
                 });
                 do_ct += 1;
@@ -195,9 +193,7 @@ fn compile(
             }
             "loop" => {
                 output.push(NamedStdRuntimeWord {
-                    word: RuntimeWord::Verb(BuiltinToken::new(
-                        crate::builtins::bi_priv_loop,
-                    )),
+                    word: RuntimeWord::Verb(BuiltinToken::new(crate::builtins::bi_priv_loop)),
                     name: "PRIV_LOOP".into(),
                 });
 
@@ -280,10 +276,7 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
 
             let compiled = Arc::new(compile(ctxt, relevant)?);
 
-            ctxt.dict.data.insert(
-                name,
-                StdFuncSeq { inner: compiled },
-            );
+            ctxt.dict.data.insert(name, StdFuncSeq { inner: compiled });
         }
         _ => {
             // We should interpret this as a line to compile and run
@@ -294,7 +287,9 @@ pub fn evaluate(ctxt: &mut Context, data: Vec<String>) -> Result<(), Error> {
                 let comp = compile(ctxt, &data)?;
                 ctxt.dict.data.insert(
                     name.clone(),
-                    StdFuncSeq { inner: Arc::new(comp) },
+                    StdFuncSeq {
+                        inner: Arc::new(comp),
+                    },
                 );
                 ctxt.dict.shame_idx += 1;
                 let temp_compiled = RuntimeWord::VerbSeq(VerbSeqInner::from_word(name));

@@ -16,7 +16,9 @@ where
     write!(&mut ctxt.cur_output, "{}", symbol).map_err(|_| Error::OutputFormat)
 }
 
-pub fn bi_pop<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_pop<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -28,7 +30,9 @@ where
     Ok(())
 }
 
-pub fn bi_cr<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_cr<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -40,7 +44,9 @@ where
     Ok(())
 }
 
-pub fn bi_lt<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_lt<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -54,7 +60,9 @@ where
     Ok(())
 }
 
-pub fn bi_gt<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_gt<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -98,7 +106,9 @@ where
     Ok(())
 }
 
-pub fn bi_eq<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_eq<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -112,7 +122,9 @@ where
     Ok(())
 }
 
-pub fn bi_add<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_add<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,
@@ -126,7 +138,9 @@ where
     Ok(())
 }
 
-pub fn bi_dup<BuiltinTok, SeqTok, Sdata, Sexec, O>(ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>) -> Result<(), Error>
+pub fn bi_dup<BuiltinTok, SeqTok, Sdata, Sexec, O>(
+    ctxt: &mut Runtime<BuiltinTok, SeqTok, Sdata, Sexec, O>,
+) -> Result<(), Error>
 where
     Sdata: Stack<Item = i32>,
     Sexec: ExecutionStack<BuiltinTok, SeqTok>,

@@ -81,10 +81,7 @@ where
     SeqTok: Clone,
 {
     pub fn from_word(tok: SeqTok) -> Self {
-        Self {
-            tok,
-            idx: 0,
-        }
+        Self { tok, idx: 0 }
     }
 }
 
@@ -234,10 +231,7 @@ where
                 // We just popped off the jump command, so now we are back in
                 // the "parent" frame.
 
-                let new_cur = self
-                    .flow_stk
-                    .last_mut()?
-                    .as_seq_inner()?;
+                let new_cur = self.flow_stk.last_mut()?.as_seq_inner()?;
 
                 if jump < 0 {
                     let abs = jump.abs() as usize;
@@ -256,7 +250,10 @@ where
         Ok(StepResult::Working(ret))
     }
 
-    pub fn provide_seq_tok(&mut self, seq: Option<RuntimeWord<BuiltinTok, SeqTok>>) -> Result<(), Error> {
+    pub fn provide_seq_tok(
+        &mut self,
+        seq: Option<RuntimeWord<BuiltinTok, SeqTok>>,
+    ) -> Result<(), Error> {
         if let Some(mut word) = seq {
             if let Ok(wd) = word.as_seq_inner() {
                 assert_eq!(wd.idx, 0);
@@ -326,8 +323,8 @@ where
 mod std_test {
     use super::*;
     use crate::std_rt::*;
-    use std::sync::Arc;
     use std::collections::BTreeMap;
+    use std::sync::Arc;
 
     #[test]
     fn foo() {
@@ -350,7 +347,8 @@ mod std_test {
                         name: "emit".into(),
                     },
                 ]),
-            });
+            },
+        );
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
@@ -382,7 +380,8 @@ mod std_test {
                         name: "star".into(),
                     },
                 ]),
-            });
+            },
+        );
 
         // // In the future, these words will be obtained from deserialized output,
         // // rather than being crafted manually. I'll probably need GhostCell for
@@ -390,7 +389,9 @@ mod std_test {
 
         // // Push `mstar` into the execution context, basically
         // // treating it as an "entry point"
-        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word("mstar".to_string())));
+        x.push_exec(RuntimeWord::VerbSeq(VerbSeqInner::from_word(
+            "mstar".to_string(),
+        )));
 
         loop {
             match x.step() {
@@ -419,7 +420,6 @@ mod std_test {
                     }
 
                     x.provide_seq_tok(c).unwrap();
-
                 }
                 Err(_e) => todo!(),
             }
@@ -431,55 +431,49 @@ mod std_test {
     }
 }
 
-
 #[cfg(test)]
 mod nostd_test {
     use super::*;
     use crate::nostd_rt::*;
-    use heapless::{Vec, String};
+    use heapless::{String, Vec};
 
     #[test]
     fn foo() {
-
-        let mut deser_dict: Vec<
-            Vec<
-                RuntimeWord<
-                    BuiltinToken<32, 16, 256>,
-                    usize,
-                >,
-                8
-            >,
-            8
-        > = Vec::new();
+        let mut deser_dict: Vec<Vec<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 8>, 8> =
+            Vec::new();
 
         // Manually craft a word, roughly:
         // : star 42 emit ;
-        deser_dict.push(
-            {
+        deser_dict
+            .push({
                 let mut new: Vec<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 8> = Vec::new();
                 new.push(RuntimeWord::LiteralVal(42)).ok();
-                new.push(RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit))).ok();
+                new.push(RuntimeWord::Verb(BuiltinToken::new(builtins::bi_emit)))
+                    .ok();
                 new
-            }
-        ).ok();
-
+            })
+            .ok();
 
         // Manually craft another word, roughly:
         // : mstar star -1 if star star then ;
-        deser_dict.push(
-            {
+        deser_dict
+            .push({
                 let mut new: Vec<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 8> = Vec::new();
-                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0)))
+                    .ok();
                 new.push(RuntimeWord::LiteralVal(-1)).ok();
                 new.push(RuntimeWord::CondRelativeJump {
                     offset: 2,
                     jump_on: false,
-                }).ok();
-                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
-                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0))).ok();
+                })
+                .ok();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0)))
+                    .ok();
+                new.push(RuntimeWord::VerbSeq(VerbSeqInner::from_word(0)))
+                    .ok();
                 new
-            }
-        ).ok();
+            })
+            .ok();
 
         // Not mutable anymore
         let idx = deser_dict;
@@ -498,19 +492,15 @@ mod nostd_test {
         // >,
         // String<OUTBUF_SZ>,
 
-        let _sz = core::mem::size_of::<Runtime<
-            BuiltinToken<32, 16, 256>,
-            usize,
-            HVecStack<i32, 32>,
-            HVecStack<
-                RuntimeWord<
-                    BuiltinToken<32, 16, 256>,
-                    usize,
-                >,
-                16,
+        let _sz = core::mem::size_of::<
+            Runtime<
+                BuiltinToken<32, 16, 256>,
+                usize,
+                HVecStack<i32, 32>,
+                HVecStack<RuntimeWord<BuiltinToken<32, 16, 256>, usize>, 16>,
+                String<256>,
             >,
-            String<256>,
-        >>();
+        >();
         // <32, 16, 256> -> 856 (on a 64-bit machine)
         // assert_eq!(856, _sz);
 
@@ -522,14 +512,14 @@ mod nostd_test {
         // treating it as an "entry point"
         x.push_exec(RuntimeWord::VerbSeq(
             // Insert `mstar`, which is deser_dict[1]
-            VerbSeqInner { tok: 1, idx: 0 }
+            VerbSeqInner { tok: 1, idx: 0 },
         ));
 
         loop {
             match x.step() {
                 Ok(StepResult::Done) => {
                     // println!("DONE!");
-                    break
+                    break;
                 }
                 Ok(StepResult::Working(WhichToken::Single(ft))) => {
                     // The runtime yields back at every call to a "builtin". Here, I
@@ -555,7 +545,6 @@ mod nostd_test {
                     // }
 
                     x.provide_seq_tok(c).unwrap();
-
                 }
                 Err(_e) => todo!(),
             }

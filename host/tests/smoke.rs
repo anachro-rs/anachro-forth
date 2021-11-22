@@ -1,5 +1,5 @@
+use anachro_forth_core::{std_rt::std_builtins, StepResult, WhichToken};
 use anachro_forth_host::{evaluate, Context};
-use anachro_forth_core::{StepResult, WhichToken, std_rt::std_builtins};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output
@@ -31,7 +31,6 @@ const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     ("0 1 = if 42 emit then", ""),
     ("1 1 = if 42 emit then", "*"),
     ("0 0 = if 42 emit then", "*"),
-
     // Nested loops - doesn't work!
     // ("0 0 if 42 emit if 42 emit else 42 emit 42 emit then then", ""),
     // ("1 0 if 42 emit if 42 emit else 42 emit 42 emit then then", "***"),
@@ -61,7 +60,6 @@ const MULTI_LINE_CASES: &[(&str, &str)] = &[
         "#,
         "************",
     ),
-
     // Nested loops: Not working!
     // (
     //     r#"
@@ -94,13 +92,14 @@ fn single_lines() {
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
 
-                    let c = ctxt.dict.data
+                    let c = ctxt
+                        .dict
+                        .data
                         .get(&rtw.tok)
                         .and_then(|n| n.inner.get(rtw.idx))
                         .map(|n| n.clone().word);
 
                     ctxt.rt.provide_seq_tok(c).unwrap();
-
                 }
             }
         }
@@ -134,13 +133,14 @@ fn multi_lines() {
                         // call the builtin immediately, but I could also yield further up,
                         // to be resumed at a later time
 
-                        let c = ctxt.dict.data
+                        let c = ctxt
+                            .dict
+                            .data
                             .get(&rtw.tok)
                             .and_then(|n| n.inner.get(rtw.idx))
                             .map(|n| n.clone().word);
 
                         ctxt.rt.provide_seq_tok(c).unwrap();
-
                     }
                 }
             }

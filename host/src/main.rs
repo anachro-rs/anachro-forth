@@ -2,14 +2,12 @@ use anachro_forth_core::compiler::evaluate;
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
 
-use anachro_forth_core::{Error, StepResult, WhichToken};
 use anachro_forth_core::compiler::Context;
 use anachro_forth_core::std_rt::std_builtins;
+use anachro_forth_core::{Error, StepResult, WhichToken};
 
 fn main() -> Result<(), Error> {
-    let mut ctxt = Context::with_builtins(
-        std_builtins()
-    );
+    let mut ctxt = Context::with_builtins(std_builtins());
 
     loop {
         let input = read().map_err(|_| Error::Input)?;
@@ -27,13 +25,14 @@ fn main() -> Result<(), Error> {
                     // call the builtin immediately, but I could also yield further up,
                     // to be resumed at a later time
 
-                    let c = ctxt.dict.data
+                    let c = ctxt
+                        .dict
+                        .data
                         .get(&rtw.tok)
                         .and_then(|n| n.inner.get(rtw.idx))
                         .map(|n| n.clone().word);
 
                     ctxt.rt.provide_seq_tok(c).unwrap();
-
                 }
                 Ok(StepResult::Done) => break true,
                 Err(e) => {
