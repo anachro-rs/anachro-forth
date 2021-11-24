@@ -31,7 +31,6 @@ impl Dict {
 
         for (word, val) in self.data.iter() {
             out.insert(word.to_string(), ser_srw(&mut ctxt, &word, val));
-            // println!("UHOH: {}", word);
         }
 
         let mut data = Vec::new();
@@ -59,14 +58,9 @@ impl Context {
         let mut vd_data: VecDeque<String> = data.iter().map(String::as_str).map(str::to_lowercase).collect();
 
         let munched = muncher(&mut vd_data);
-        println!("{:?}", munched);
         assert!(vd_data.is_empty());
 
         let conv: Vec<NamedStdRuntimeWord> = munched.into_iter().map(|m| m.to_named_rt_words(&mut self.dict)).flatten().collect();
-        for c in conv.iter() {
-            print!("{}, ", c.name);
-        }
-        println!();
 
         Ok(conv)
     }

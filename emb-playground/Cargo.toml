@@ -20,8 +20,7 @@ version = "0.2.5"
 path = "vendor/groundhog/core"
 
 [dependencies.groundhog-nrf52]
-version = "0.3.0"
-path = "vendor/groundhog/drivers/groundhog-nrf52"
+version = "0.4.0"
 
 [dependencies.postcard]
 version = "0.7.2"

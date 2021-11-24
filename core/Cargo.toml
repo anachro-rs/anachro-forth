@@ -1,7 +1,16 @@
 [package]
 name = "anachro-forth-core"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+description = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus"
+repository = "https://github.com/anachro-rs/anachro-forth"
+authors = ["James Munns <james@onevariable.com>"]
+readme = "../README.md"
+categories = [
+    "embedded",
+    "no-std",
+]
+license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
