@@ -1,3 +1,4 @@
+use crate::ser_de::SerDict;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::Arc;

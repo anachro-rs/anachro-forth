@@ -27,6 +27,7 @@ impl Dict {
 
     pub fn serialize(&self) -> SerDict {
         let mut out: BTreeMap<String, Vec<SerWord>> = BTreeMap::new();
+        let mut data_map: Vec<String> = Vec::new();
         let mut ctxt = SerContext::new();
 
         for (word, val) in self.data.iter() {
@@ -36,10 +37,12 @@ impl Dict {
         let mut data = Vec::new();
         for word in ctxt.seqs {
             data.push(out.get(&word).unwrap().clone());
+            data_map.push(word.clone());
         }
 
         SerDict {
             data,
+            data_map: Some(data_map),
             bis: ctxt.bis,
         }
     }
@@ -51,10 +54,58 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn load_ser_dict(&mut self, data: &SerDict) {
+        let data_map = if let Some(dm) = data.data_map.as_ref() {
+            dm.clone()
+        } else {
+            eprintln!("Error: dict has no name map! Refusing to load.");
+            return;
+        };
 
+        if !data.bis.iter().all(|bi| self.dict.bis.contains_key(bi)) {
+            eprintln!("Missing builtins! Refusing to load.");
+            return;
+        }
 
-    #[allow(dead_code)]
-    fn compile2(&mut self, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
+        if data_map.len() != data.data.len() {
+            eprintln!("Data map size mismatch! Refusing to load.");
+            return;
+        }
+
+        for (name, word) in data_map.iter().zip(data.data.iter()) {
+            let cword = word.iter().map(|x| {
+                match x {
+                    SerWord::LiteralVal(v) => NamedStdRuntimeWord { name: format!("LIT({})", v), word: RuntimeWord::LiteralVal(*v) },
+                    SerWord::Verb(i) => {
+                        let txt = data.bis.get(*i as usize).unwrap();
+                        NamedStdRuntimeWord {
+                            name: txt.clone(),
+                            word: RuntimeWord::Verb(self.dict.bis.get(txt).unwrap().clone()),
+                        }
+                    }
+                    SerWord::VerbSeq(i) => {
+                        let txt = data_map.get(*i as usize).unwrap();
+                        NamedStdRuntimeWord {
+                            name: txt.clone(),
+                            word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(txt.to_string())),
+                        }
+                    },
+                    SerWord::UncondRelativeJump { offset } => NamedStdRuntimeWord {
+                        name: format!("UCRJ({})", offset),
+                        word: RuntimeWord::UncondRelativeJump { offset: *offset }
+                    },
+                    SerWord::CondRelativeJump { offset, jump_on } => NamedStdRuntimeWord {
+                        name: format!("CRJ({})", offset),
+                        word: RuntimeWord::CondRelativeJump { offset: *offset, jump_on: *jump_on }
+                    },
+                }
+            }).collect::<Vec<_>>();
+
+            self.dict.data.insert(name.clone(), StdFuncSeq { inner: Arc::new(cword) });
+        }
+    }
+
+    fn compile(&mut self, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
         let mut vd_data: VecDeque<String> = data.iter().map(String::as_str).map(str::to_lowercase).collect();
 
         let munched = muncher(&mut vd_data);
@@ -77,7 +128,7 @@ impl Context {
                 let relevant = &data[2..][..data.len() - 3];
 
                 // let compiled = Arc::new(self.compile(relevant)?);
-                let compiled = Arc::new(self.compile2(relevant).unwrap());
+                let compiled = Arc::new(self.compile(relevant).unwrap());
 
                 self.dict.data.insert(name, StdFuncSeq { inner: compiled });
             }
@@ -88,7 +139,7 @@ impl Context {
                 if !data.is_empty() {
                     let name = format!("__{}", self.dict.shame_idx);
                     // let comp = self.compile(&data)?;
-                    let comp = self.compile2(&data).unwrap();
+                    let comp = self.compile(&data).unwrap();
                     self.dict.data.insert(
                         name.clone(),
                         StdFuncSeq {

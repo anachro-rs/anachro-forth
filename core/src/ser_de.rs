@@ -10,10 +10,16 @@ pub enum SerWord {
     CondRelativeJump { offset: i32, jump_on: bool },
 }
 
+// --------------------------------------------------------------------------------
+// NOTE! These two definitions MUST be kept in sync! Otherwise there will
+// be corruption and inter-compat issues!
+
+
 #[cfg(any(test, feature = "std"))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerDict {
     pub data: Vec<Vec<SerWord>>,
+    pub data_map: Option<Vec<String>>,
     pub bis: Vec<String>,
 }
 
@@ -22,8 +28,14 @@ pub struct SerDictFixed<'a, const SEQS_CT: usize, const SEQ_SZ: usize, const BIS
     pub data: HVec<HVec<SerWord, SEQ_SZ>, SEQS_CT>,
 
     #[serde(borrow)]
+    pub data_map: Option<HVec<&'a str, SEQS_CT>>,
+
+    #[serde(borrow)]
     pub bis: HVec<&'a str, BIS_CT>,
 }
+
+// --------------------------------------------------------------------------------
+
 
 #[cfg(test)]
 mod test {

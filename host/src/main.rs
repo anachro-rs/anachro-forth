@@ -1,4 +1,5 @@
-use std::io::Result as IoResult;
+use std::borrow::Cow;
+use std::io::{Read, Result as IoResult};
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 use std::fs::{read_to_string, write};
@@ -13,13 +14,25 @@ use a4_core::{Error, StepResult, WhichToken};
 #[structopt(name = "a4", about = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus")]
 enum Opt {
     /// Start an interactive "Read, Evaluate, Print, Loop" session
-    Repl,
+    Repl {
+        /// A source file to initialize the repl with. Can be a ".fth" or ".a4" file
+        input: Option<PathBuf>,
+    },
 
     /// Compile the provided ".fth" source file into an ".a4" compiled
     /// output
     Compile {
+        /// The source file to compile
         input: PathBuf,
+
+        /// The output compiled path. If none is provided, the input file
+        /// path will be used, replacing the extension with ".a4"
         output: Option<PathBuf>,
+
+        /// Omit the names of user-defined words from the serialized output
+        /// This is useful for reducing bytes-on-the-wire
+        #[structopt(short, long = "omit-word-names")]
+        omit_word_names: bool,
     },
 }
 
@@ -27,25 +40,24 @@ fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::Repl => {
+        Opt::Repl { input } => {
             println!("Entering Repl...");
-            repl_main()?;
+            repl_main(input)?;
         }
-        Opt::Compile { input, output } => {
+        Opt::Compile { input, output, omit_word_names } => {
             let output = output.unwrap_or({
                 let mut out = input.clone();
                 assert!(out.set_extension("a4"), "no filename?");
                 out
             });
-            compile_main(input, output)?;
+            compile_main(input, output, omit_word_names)?;
         }
-        _ => todo!(),
     }
 
     Ok(())
 }
 
-fn compile_main(input: PathBuf, output: PathBuf) -> Result<(), Error> {
+fn compile_main(input: PathBuf, output: PathBuf, omit_word_names: bool) -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
 
     let source = read_to_string(&input).map_err(|_| Error::Input)?;
@@ -71,7 +83,11 @@ your source file to ensure it ONLY includes definitions, which
 start with a ':', and end with a ';'.
 ");
 
-    let ser = ctxt.serialize();
+    let mut ser = ctxt.serialize();
+
+    if omit_word_names {
+        ser.data_map = None;
+    }
 
     let pcser = postcard::to_stdvec(&ser).unwrap();
     let mut zc = rzcobs::encode(&pcser);
@@ -89,8 +105,28 @@ start with a ':', and end with a ';'.
     Ok(())
 }
 
-fn repl_main() -> Result<(), Error> {
+fn repl_main(input: Option<PathBuf>) -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
+
+    if let Some(pb) = input {
+        match pb.extension().map(|x| x.to_string_lossy()) {
+            Some(Cow::Borrowed("a4")) => {
+                let mut f = std::fs::File::open(pb).unwrap();
+                let mut buf = Vec::new();
+                f.read_to_end(&mut buf).unwrap();
+                assert_eq!(Some(&0x00), buf.last());
+                buf.pop();
+                let unrz = rzcobs::decode(&buf).unwrap();
+                let deser = postcard::from_bytes(&unrz).unwrap();
+                ctxt.load_ser_dict(&deser);
+            },
+            Some(_) => todo!("No .fth loading yet, sorry"),
+            None => {
+                eprintln!("ERROR: No extension found!");
+                return Err(Error::InternalError);
+            },
+        }
+    }
 
     loop {
         let input = read().map_err(|_| Error::Input)?;
@@ -125,22 +161,6 @@ fn repl_main() -> Result<(), Error> {
             }
         };
         ctxt.dict.data.retain(|k, _| !k.starts_with("__"));
-        let ser = ctxt.serialize();
-        println!("{:?}", ser);
-
-        let pcser = postcard::to_stdvec(&ser).unwrap();
-        // println!("{:02X?}", pcser);
-
-        let mut zc = rzcobs::encode(&pcser);
-        zc.push(0);
-        println!("{:02X?}", zc);
-
-        let mut rler = kolben::rlercobs::encode(&pcser);
-        rler.push(0);
-        // println!("{:02X?}", rler);
-
-        println!("{}, {}, {}", pcser.len(), zc.len(), rler.len());
-
         print(&mut ctxt, is_ok);
     }
 }
