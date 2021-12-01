@@ -5,10 +5,7 @@ scripting language for Anachro Powerbus platform.
 
 ## Use Case
 
-The intended use case is to write and compile scripts on
-a Host PC, and to load and execute these scripts in a
-constrained, no_std environment, such as on embedded systems
-or WASM targets.
+The intended use case is to write and compile scripts on a Host PC, and to load and execute these scripts in a constrained, no_std environment, such as on embedded systems or WASM targets.
 
 ## Contents
 

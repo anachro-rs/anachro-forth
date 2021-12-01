@@ -1,20 +1,23 @@
 [package]
-name = "anachro-forth-host"
-version = "0.1.0"
+name = "a4"
+version = "0.0.1"
 edition = "2021"
+description = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus"
+repository = "https://github.com/anachro-rs/anachro-forth"
+authors = ["James Munns <james@onevariable.com>"]
+readme = "../README.md"
 license = "MIT OR Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tui = "0.16.0"
-termion = "1.5.6"
 rzcobs = "0.1.2"
 kolben = "0.0.3"
 
 [dependencies.anachro-forth-core]
 path = "../core"
 features = ["std"]
+version = "0.0.2"
 
 [dependencies.postcard]
 version = "0.7.2"
@@ -23,3 +26,5 @@ features = ["use-std"]
 [dependencies.serde]
 version = "1.0.130"
 features = ["derive"]
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
