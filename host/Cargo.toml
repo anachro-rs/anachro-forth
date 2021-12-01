@@ -13,8 +13,9 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 rzcobs = "0.1.2"
 kolben = "0.0.3"
+structopt = "0.3.25"
 
-[dependencies.anachro-forth-core]
+[dependencies.a4-core]
 path = "../core"
 features = ["std"]
 version = "0.0.2"

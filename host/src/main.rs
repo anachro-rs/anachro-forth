@@ -1,11 +1,95 @@
 use std::io::Result as IoResult;
 use std::io::{stdin, stdout, Write};
+use std::path::PathBuf;
+use std::fs::{read_to_string, write};
 
-use anachro_forth_core::compiler::Context;
-use anachro_forth_core::std_rt::std_builtins;
-use anachro_forth_core::{Error, StepResult, WhichToken};
+use structopt::StructOpt;
+
+use a4_core::compiler::Context;
+use a4_core::std_rt::std_builtins;
+use a4_core::{Error, StepResult, WhichToken};
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "a4", about = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus")]
+enum Opt {
+    /// Start an interactive "Read, Evaluate, Print, Loop" session
+    Repl,
+
+    /// Compile the provided ".fth" source file into an ".a4" compiled
+    /// output
+    Compile {
+        input: PathBuf,
+        output: Option<PathBuf>,
+    },
+}
 
 fn main() -> Result<(), Error> {
+    let opt = Opt::from_args();
+
+    match opt {
+        Opt::Repl => {
+            println!("Entering Repl...");
+            repl_main()?;
+        }
+        Opt::Compile { input, output } => {
+            let output = output.unwrap_or({
+                let mut out = input.clone();
+                assert!(out.set_extension("a4"), "no filename?");
+                out
+            });
+            compile_main(input, output)?;
+        }
+        _ => todo!(),
+    }
+
+    Ok(())
+}
+
+fn compile_main(input: PathBuf, output: PathBuf) -> Result<(), Error> {
+    let mut ctxt = Context::with_builtins(std_builtins());
+
+    let source = read_to_string(&input).map_err(|_| Error::Input)?;
+
+    for line in source.lines() {
+        let parts = line.split_whitespace().map(str::to_string).collect();
+        ctxt.evaluate(parts)?;
+    }
+
+    let mut extras = false;
+    ctxt.dict.data.retain(|k, _| {
+        let keep = !k.starts_with("__");
+        if !keep {
+            extras = true;
+        }
+        keep
+    });
+
+    eprintln!("
+WARNING: Found at least one non-definition in the input file.
+These line(s) will NOT be serialized or executed. Please review
+your source file to ensure it ONLY includes definitions, which
+start with a ':', and end with a ';'.
+");
+
+    let ser = ctxt.serialize();
+
+    let pcser = postcard::to_stdvec(&ser).unwrap();
+    let mut zc = rzcobs::encode(&pcser);
+    zc.push(0);
+
+    write(&output, &zc).map_err(|_| Error::OutputFormat)?;
+
+    println!("Input file:  {:?}", input);
+    println!("Output file: {:?}", output);
+    println!("===========================================");
+    println!("Builtin words used:      {}", ser.bis.len());
+    println!("User defined words:      {}", ser.data.len());
+    println!("Serialized size (bytes): {}", zc.len());
+
+    Ok(())
+}
+
+fn repl_main() -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
 
     loop {
