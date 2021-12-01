@@ -52,7 +52,6 @@
 //! for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 //! dual licensed as above, without any additional terms or conditions.
 
-
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 
 use core::{fmt::Write, marker::PhantomData};
@@ -221,9 +220,7 @@ where
                     self.data_stk.push(*lit);
                     None
                 }
-                RuntimeWord::Verb(ft) => {
-                    Some(WhichToken::Single(ft.clone()))
-                }
+                RuntimeWord::Verb(ft) => Some(WhichToken::Single(ft.clone())),
                 RuntimeWord::VerbSeq(ref mut seq) => {
                     // TODO: I should probably check for a difference
                     // between exactly one over-bounds (jump to end of seq),

@@ -73,9 +73,13 @@ impl Context {
         }
 
         for (name, word) in data_map.iter().zip(data.data.iter()) {
-            let cword = word.iter().map(|x| {
-                match x {
-                    SerWord::LiteralVal(v) => NamedStdRuntimeWord { name: format!("LIT({})", v), word: RuntimeWord::LiteralVal(*v) },
+            let cword = word
+                .iter()
+                .map(|x| match x {
+                    SerWord::LiteralVal(v) => NamedStdRuntimeWord {
+                        name: format!("LIT({})", v),
+                        word: RuntimeWord::LiteralVal(*v),
+                    },
                     SerWord::Verb(i) => {
                         let txt = data.bis.get(*i as usize).unwrap();
                         NamedStdRuntimeWord {
@@ -89,29 +93,45 @@ impl Context {
                             name: txt.clone(),
                             word: RuntimeWord::VerbSeq(VerbSeqInner::from_word(txt.to_string())),
                         }
-                    },
+                    }
                     SerWord::UncondRelativeJump { offset } => NamedStdRuntimeWord {
                         name: format!("UCRJ({})", offset),
-                        word: RuntimeWord::UncondRelativeJump { offset: *offset }
+                        word: RuntimeWord::UncondRelativeJump { offset: *offset },
                     },
                     SerWord::CondRelativeJump { offset, jump_on } => NamedStdRuntimeWord {
                         name: format!("CRJ({})", offset),
-                        word: RuntimeWord::CondRelativeJump { offset: *offset, jump_on: *jump_on }
+                        word: RuntimeWord::CondRelativeJump {
+                            offset: *offset,
+                            jump_on: *jump_on,
+                        },
                     },
-                }
-            }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
 
-            self.dict.data.insert(name.clone(), StdFuncSeq { inner: Arc::new(cword) });
+            self.dict.data.insert(
+                name.clone(),
+                StdFuncSeq {
+                    inner: Arc::new(cword),
+                },
+            );
         }
     }
 
     fn compile(&mut self, data: &[String]) -> Result<Vec<NamedStdRuntimeWord>, Error> {
-        let mut vd_data: VecDeque<String> = data.iter().map(String::as_str).map(str::to_lowercase).collect();
+        let mut vd_data: VecDeque<String> = data
+            .iter()
+            .map(String::as_str)
+            .map(str::to_lowercase)
+            .collect();
 
         let munched = muncher(&mut vd_data);
         assert!(vd_data.is_empty());
 
-        let conv: Vec<NamedStdRuntimeWord> = munched.into_iter().map(|m| m.to_named_rt_words(&mut self.dict)).flatten().collect();
+        let conv: Vec<NamedStdRuntimeWord> = munched
+            .into_iter()
+            .map(|m| m.to_named_rt_words(&mut self.dict))
+            .flatten()
+            .collect();
 
         Ok(conv)
     }
@@ -155,8 +175,6 @@ impl Context {
 
         Ok(())
     }
-
-
 
     pub fn serialize(&self) -> SerDict {
         self.dict.serialize()
@@ -212,7 +230,6 @@ fn parse_num(input: &str) -> Option<i32> {
     input.parse::<i32>().ok()
 }
 
-
 /// This struct represents a "chunk" of the AST
 #[derive(Debug)]
 enum Chunk {
@@ -245,12 +262,15 @@ impl Chunk {
 
                 conv.push_front(NamedStdRuntimeWord {
                     name: "CRJ".into(),
-                    word: RuntimeWord::CondRelativeJump { offset: conv.len() as i32, jump_on: false },
+                    word: RuntimeWord::CondRelativeJump {
+                        offset: conv.len() as i32,
+                        jump_on: false,
+                    },
                 });
 
                 let conv: Vec<NamedStdRuntimeWord> = conv.into_iter().collect();
                 ret.extend(conv);
-            },
+            }
             Chunk::IfElseThen { if_body, else_body } => {
                 let mut if_conv: VecDeque<NamedStdRuntimeWord> = if_body
                     .into_iter()
@@ -266,17 +286,23 @@ impl Chunk {
 
                 if_conv.push_back(NamedStdRuntimeWord {
                     name: "UCRJ".into(),
-                    word: RuntimeWord::UncondRelativeJump { offset: else_conv.len() as i32 },
+                    word: RuntimeWord::UncondRelativeJump {
+                        offset: else_conv.len() as i32,
+                    },
                 });
 
                 if_conv.push_front(NamedStdRuntimeWord {
                     name: "CRJ".into(),
-                    word: RuntimeWord::CondRelativeJump { offset: if_conv.len() as i32, jump_on: false },
+                    word: RuntimeWord::CondRelativeJump {
+                        offset: if_conv.len() as i32,
+                        jump_on: false,
+                    },
                 });
 
-                let conv: Vec<NamedStdRuntimeWord> = if_conv.into_iter().chain(else_conv.into_iter()).collect();
+                let conv: Vec<NamedStdRuntimeWord> =
+                    if_conv.into_iter().chain(else_conv.into_iter()).collect();
                 ret.extend(conv);
-            },
+            }
             Chunk::DoLoop { do_body } => {
                 // First, convert the body into a sequence
                 let mut conv: VecDeque<NamedStdRuntimeWord> = do_body
@@ -304,13 +330,16 @@ impl Chunk {
                 // The Minus One here accounts for the addition of the CRJ. We should not loop back to
                 // the double `>r`s, as those only happen once at the top of the loop.
                 conv.push_back(NamedStdRuntimeWord {
-                    word: RuntimeWord::CondRelativeJump { offset: -1 * len as i32 - 1, jump_on: false },
+                    word: RuntimeWord::CondRelativeJump {
+                        offset: -1 * len as i32 - 1,
+                        jump_on: false,
+                    },
                     name: "CRJ".into(),
                 });
 
                 let conv: Vec<NamedStdRuntimeWord> = conv.into_iter().collect();
                 ret.extend(conv);
-            },
+            }
             Chunk::Token(tok) => {
                 ret.push(if let Some(bi) = dict.bis.get(&tok).cloned() {
                     NamedStdRuntimeWord {
@@ -331,7 +360,7 @@ impl Chunk {
                     panic!()
                     // return Err(Error::InternalError);
                 });
-            },
+            }
         }
 
         ret
@@ -379,11 +408,7 @@ fn munch_do(data: &mut VecDeque<String>) -> Chunk {
             "if" => {
                 chunks.push(munch_if(data));
             }
-            "loop" => {
-                return Chunk::DoLoop {
-                    do_body: chunks,
-                }
-            }
+            "loop" => return Chunk::DoLoop { do_body: chunks },
             _ => chunks.push(Chunk::Token(next)),
         }
     }
@@ -408,11 +433,7 @@ fn munch_if(data: &mut VecDeque<String>) -> Chunk {
             "if" => {
                 chunks.push(munch_if(data));
             }
-            "then" => {
-                return Chunk::IfThen {
-                    if_body: chunks,
-                }
-            }
+            "then" => return Chunk::IfThen { if_body: chunks },
             "else" => {
                 return munch_else(data, chunks);
             }

@@ -1,8 +1,8 @@
 use std::borrow::Cow;
-use std::io::{Read, Result as IoResult};
-use std::io::{stdin, stdout, Write};
-use std::path::PathBuf;
 use std::fs::{read_to_string, write};
+use std::io::{stdin, stdout, Write};
+use std::io::{Read, Result as IoResult};
+use std::path::PathBuf;
 
 use structopt::StructOpt;
 
@@ -11,13 +11,19 @@ use a4_core::std_rt::std_builtins;
 use a4_core::{Error, StepResult, WhichToken};
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "a4", about = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus")]
+#[structopt(
+    name = "a4",
+    about = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus"
+)]
 enum Opt {
     /// Start an interactive "Read, Evaluate, Print, Loop" session
     Repl {
-        /// A source file to initialize the repl with. Can be a ".fth" or ".a4" file
+        /// A source file to initialize the repl with. Must be an ".a4" file
         input: Option<PathBuf>,
     },
+
+    /// Run a given ".fth" file, exiting after execution
+    Run { input: PathBuf },
 
     /// Compile the provided ".fth" source file into an ".a4" compiled
     /// output
@@ -44,13 +50,20 @@ fn main() -> Result<(), Error> {
             println!("Entering Repl...");
             repl_main(input)?;
         }
-        Opt::Compile { input, output, omit_word_names } => {
+        Opt::Compile {
+            input,
+            output,
+            omit_word_names,
+        } => {
             let output = output.unwrap_or({
                 let mut out = input.clone();
                 assert!(out.set_extension("a4"), "no filename?");
                 out
             });
             compile_main(input, output, omit_word_names)?;
+        }
+        Opt::Run { input } => {
+            run_main(input)?;
         }
     }
 
@@ -76,12 +89,14 @@ fn compile_main(input: PathBuf, output: PathBuf, omit_word_names: bool) -> Resul
         keep
     });
 
-    eprintln!("
+    eprintln!(
+        "
 WARNING: Found at least one non-definition in the input file.
 These line(s) will NOT be serialized or executed. Please review
 your source file to ensure it ONLY includes definitions, which
 start with a ':', and end with a ';'.
-");
+"
+    );
 
     let mut ser = ctxt.serialize();
 
@@ -105,6 +120,57 @@ start with a ':', and end with a ';'.
     Ok(())
 }
 
+fn run_main(input: PathBuf) -> Result<(), Error> {
+    let mut ctxt = Context::with_builtins(std_builtins());
+
+    let input = read_to_string(input).map_err(|_| Error::Input)?;
+
+    for line in input.lines() {
+        let input: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+
+        if input.is_empty() {
+            continue;
+        }
+
+        println!("=> {}", line);
+
+        ctxt.evaluate(input)?;
+        let is_ok = loop {
+            match ctxt.step() {
+                Ok(StepResult::Working(WhichToken::Single(ft))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+                    ft.exec(&mut ctxt.rt).unwrap();
+                }
+                Ok(StepResult::Working(WhichToken::Ref(rtw))) => {
+                    // The runtime yields back at every call to a "builtin". Here, I
+                    // call the builtin immediately, but I could also yield further up,
+                    // to be resumed at a later time
+
+                    let c = ctxt
+                        .dict
+                        .data
+                        .get(&rtw.tok)
+                        .and_then(|n| n.inner.get(rtw.idx))
+                        .map(|n| n.clone().word);
+
+                    ctxt.rt.provide_seq_tok(c).unwrap();
+                }
+                Ok(StepResult::Done) => break true,
+                Err(e) => {
+                    eprintln!("ERROR! -> {:?}", e);
+                    break false;
+                }
+            }
+        };
+        ctxt.dict.data.retain(|k, _| !k.starts_with("__"));
+        print(&mut ctxt, is_ok);
+    }
+
+    Ok(())
+}
+
 fn repl_main(input: Option<PathBuf>) -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
 
@@ -119,12 +185,12 @@ fn repl_main(input: Option<PathBuf>) -> Result<(), Error> {
                 let unrz = rzcobs::decode(&buf).unwrap();
                 let deser = postcard::from_bytes(&unrz).unwrap();
                 ctxt.load_ser_dict(&deser);
-            },
+            }
             Some(_) => todo!("No .fth loading yet, sorry"),
             None => {
                 eprintln!("ERROR: No extension found!");
                 return Err(Error::InternalError);
-            },
+            }
         }
     }
 

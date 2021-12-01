@@ -32,9 +32,18 @@ const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     ("1 1 = if 42 emit then", "*"),
     ("0 0 = if 42 emit then", "*"),
     // Nested loops
-    ("0   if 42 emit if 42 emit else 42 emit 42 emit then then", ""),
-    ("0 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "***"),
-    ("1 1 if 42 emit if 42 emit else 42 emit 42 emit then then", "**"),
+    (
+        "0   if 42 emit if 42 emit else 42 emit 42 emit then then",
+        "",
+    ),
+    (
+        "0 1 if 42 emit if 42 emit else 42 emit 42 emit then then",
+        "***",
+    ),
+    (
+        "1 1 if 42 emit if 42 emit else 42 emit 42 emit then then",
+        "**",
+    ),
 ];
 
 const MULTI_LINE_CASES: &[(&str, &str)] = &[

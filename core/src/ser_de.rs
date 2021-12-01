@@ -14,7 +14,6 @@ pub enum SerWord {
 // NOTE! These two definitions MUST be kept in sync! Otherwise there will
 // be corruption and inter-compat issues!
 
-
 #[cfg(any(test, feature = "std"))]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SerDict {
@@ -36,7 +35,6 @@ pub struct SerDictFixed<'a, const SEQS_CT: usize, const SEQ_SZ: usize, const BIS
 
 // --------------------------------------------------------------------------------
 
-
 #[cfg(test)]
 mod test {
     use crate::compiler::Context;
@@ -49,30 +47,26 @@ mod test {
     fn roundtrip() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
-        ctxt.evaluate(
-            vec![
-                ":".into(),
-                "star".into(),
-                "42".into(),
-                "emit".into(),
-                ";".into(),
-            ],
-        )
+        ctxt.evaluate(vec![
+            ":".into(),
+            "star".into(),
+            "42".into(),
+            "emit".into(),
+            ";".into(),
+        ])
         .unwrap();
 
-        ctxt.evaluate(
-            vec![
-                ":".into(),
-                "mstar".into(),
-                "if".into(),
-                "star".into(),
-                "else".into(),
-                "star".into(),
-                "star".into(),
-                "then".into(),
-                ";".into(),
-            ],
-        )
+        ctxt.evaluate(vec![
+            ":".into(),
+            "mstar".into(),
+            "if".into(),
+            "star".into(),
+            "else".into(),
+            "star".into(),
+            "star".into(),
+            "then".into(),
+            ";".into(),
+        ])
         .unwrap();
 
         let serdict = ctxt.serialize();
@@ -120,26 +114,19 @@ mod test {
     fn roundtrip2() {
         let mut ctxt = Context::with_builtins(std_builtins());
 
-        ctxt.evaluate(
-            vec![
-            ":".into(),
-            "nop".into(),
-            ";".into(),
-            ])
-        .unwrap();
+        ctxt.evaluate(vec![":".into(), "nop".into(), ";".into()])
+            .unwrap();
 
-        ctxt.evaluate(
-            vec![
-                ":".into(),
-                "test".into(),
-                "1000000".into(),
-                "0".into(),
-                "do".into(),
-                "nop".into(),
-                "loop".into(),
-                ";".into(),
-            ],
-        )
+        ctxt.evaluate(vec![
+            ":".into(),
+            "test".into(),
+            "1000000".into(),
+            "0".into(),
+            "do".into(),
+            "nop".into(),
+            "loop".into(),
+            ";".into(),
+        ])
         .unwrap();
 
         let serdict = ctxt.serialize();
