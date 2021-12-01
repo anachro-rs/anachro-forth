@@ -244,6 +244,9 @@ enum Chunk {
         do_body: Vec<Chunk>,
     },
     Token(String),
+    Comment {
+        contents: Vec<String>,
+    }
 }
 
 impl Chunk {
@@ -361,6 +364,9 @@ impl Chunk {
                     // return Err(Error::InternalError);
                 });
             }
+            Chunk::Comment { .. } => {
+                // Nothing to do for comments
+            }
         }
 
         ret
@@ -385,11 +391,40 @@ fn muncher(data: &mut VecDeque<String>) -> Vec<Chunk> {
             "if" => {
                 chunks.push(munch_if(data));
             }
+            "(" => {
+                chunks.push(Chunk::Comment { contents: munch_comment(data) });
+            }
             _ => chunks.push(Chunk::Token(next)),
         }
     }
 
     chunks
+}
+
+fn munch_comment(data: &mut VecDeque<String>) -> Vec<String> {
+    let mut contents = vec![];
+    loop {
+        let next = if let Some(t) = data.pop_front() {
+            t
+        } else {
+            break;
+        };
+
+        match next.as_str() {
+            "(" => {
+                contents.extend(munch_comment(data));
+            }
+            ")" => {
+                return contents;
+            }
+            _ => {
+                contents.push(next);
+            }
+        }
+    }
+
+    // We... shouldn't get here. This means we never found our ")" after the "("
+    todo!()
 }
 
 fn munch_do(data: &mut VecDeque<String>) -> Chunk {
