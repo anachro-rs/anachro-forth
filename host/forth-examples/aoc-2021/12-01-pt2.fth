@@ -14,11 +14,6 @@
 ( i0 i1 n -- n )
 : incr_on_bigger >r < if 1 else 0 then r> + ;
 
-( Duplicate the OLDEST item on the list, as we will )
-( need to keep it around for the NEXT comparison    )
-( i0 i1 n -- i0 i0 i1 n )
-: duplicate_second_item >r >r dup r> r> ;
-
 ( load data )
 ex_data
 
