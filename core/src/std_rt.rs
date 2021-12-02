@@ -31,16 +31,28 @@ impl<T> StdVecStack<T> {
 impl<T> Stack for StdVecStack<T> {
     type Item = T;
 
-    fn push(&mut self, data: T) {
+    fn push(&mut self, data: T) -> Result<(), Error> {
         self.data.push(data);
+        Ok(())
     }
 
     fn pop(&mut self) -> Result<T, Error> {
         self.data.pop().ok_or(Error::DataStackUnderflow)
     }
 
+    fn peek_back(&self, back: usize) -> Result<&Self::Item, Error> {
+        self.data.iter().rev().skip(back).next().ok_or(Error::DataStackUnderflow)
+    }
+
     fn last(&self) -> Result<&Self::Item, Error> {
         self.data.last().ok_or(Error::InternalError) // TODO: Wrong error!
+    }
+
+    fn pop_back(&mut self, back: usize) -> Result<Self::Item, Error> {
+        if back + 1 > self.data.len() {
+            return Err(Error::DataStackUnderflow);
+        }
+        Ok(self.data.remove(self.data.len() - back - 1))
     }
 }
 
@@ -119,16 +131,23 @@ pub fn new_runtime() -> StdRuntime {
 
 pub fn std_builtins() -> &'static [(&'static str, fn(&mut StdRuntime) -> Result<(), Error>)] {
     &[
-        ("emit", crate::builtins::bi_emit),
-        (".", crate::builtins::bi_pop),
-        ("cr", crate::builtins::bi_cr),
-        (">r", crate::builtins::bi_retstk_push),
-        ("r>", crate::builtins::bi_retstk_pop),
-        ("=", crate::builtins::bi_eq),
-        ("<", crate::builtins::bi_lt),
-        (">", crate::builtins::bi_gt),
-        ("dup", crate::builtins::bi_dup),
         ("+", crate::builtins::bi_add),
+        (".", crate::builtins::bi_pop),
+        ("2dup", crate::builtins::bi_2dup),
+        ("<", crate::builtins::bi_lt),
+        ("=", crate::builtins::bi_eq),
+        (">", crate::builtins::bi_gt),
+        (">r", crate::builtins::bi_retstk_push),
+        ("cr", crate::builtins::bi_cr),
+        ("drop", crate::builtins::bi_drop),
+        ("dup", crate::builtins::bi_dup),
+        ("emit", crate::builtins::bi_emit),
+        ("pick", crate::builtins::bi_pick),
+        ("PRIV_LOOP", crate::builtins::bi_priv_loop),
+        ("r>", crate::builtins::bi_retstk_pop),
+        ("roll", crate::builtins::bi_roll),
+        ("rot", crate::builtins::bi_rot),
+        ("swap", crate::builtins::bi_swap),
     ]
 }
 

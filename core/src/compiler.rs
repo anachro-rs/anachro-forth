@@ -360,7 +360,7 @@ impl Chunk {
                         name: format!("LIT({})", num),
                     }
                 } else {
-                    panic!()
+                    panic!("{:?}", tok);
                     // return Err(Error::InternalError);
                 });
             }

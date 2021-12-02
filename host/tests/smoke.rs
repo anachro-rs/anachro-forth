@@ -1,5 +1,5 @@
-use anachro_forth_core::compiler::Context;
-use anachro_forth_core::{std_rt::std_builtins, StepResult, WhichToken};
+use a4_core::compiler::Context;
+use a4_core::{std_rt::std_builtins, StepResult, WhichToken};
 
 const SINGLE_LINE_CASES: &[(&str, &str)] = &[
     // Basic output

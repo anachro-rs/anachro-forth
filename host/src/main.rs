@@ -20,10 +20,18 @@ enum Opt {
     Repl {
         /// A source file to initialize the repl with. Must be an ".a4" file
         input: Option<PathBuf>,
+
+        #[structopt(short, long)]
+        debug: bool,
     },
 
     /// Run a given ".fth" file, exiting after execution
-    Run { input: PathBuf },
+    Run {
+        input: PathBuf,
+
+        #[structopt(short, long)]
+        debug: bool,
+    },
 
     /// Compile the provided ".fth" source file into an ".a4" compiled
     /// output
@@ -46,9 +54,9 @@ fn main() -> Result<(), Error> {
     let opt = Opt::from_args();
 
     match opt {
-        Opt::Repl { input } => {
+        Opt::Repl { input, debug } => {
             println!("Entering Repl...");
-            repl_main(input)?;
+            repl_main(input, debug)?;
         }
         Opt::Compile {
             input,
@@ -62,8 +70,8 @@ fn main() -> Result<(), Error> {
             });
             compile_main(input, output, omit_word_names)?;
         }
-        Opt::Run { input } => {
-            run_main(input)?;
+        Opt::Run { input, debug } => {
+            run_main(input, debug)?;
         }
     }
 
@@ -120,7 +128,7 @@ start with a ':', and end with a ';'.
     Ok(())
 }
 
-fn run_main(input: PathBuf) -> Result<(), Error> {
+fn run_main(input: PathBuf, debug: bool) -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
 
     let input = read_to_string(input).map_err(|_| Error::Input)?;
@@ -132,7 +140,9 @@ fn run_main(input: PathBuf) -> Result<(), Error> {
             continue;
         }
 
-        println!("=> {}", line);
+        if debug {
+            println!("=> {}", line);
+        }
 
         ctxt.evaluate(input)?;
         let is_ok = loop {
@@ -163,6 +173,9 @@ fn run_main(input: PathBuf) -> Result<(), Error> {
                     break false;
                 }
             }
+            if debug {
+                println!("# {:?} - {:?}", ctxt.data_stack().data(), ctxt.return_stack().data());
+            }
         };
         ctxt.dict.data.retain(|k, _| !k.starts_with("__"));
         print(&mut ctxt, is_ok);
@@ -171,7 +184,7 @@ fn run_main(input: PathBuf) -> Result<(), Error> {
     Ok(())
 }
 
-fn repl_main(input: Option<PathBuf>) -> Result<(), Error> {
+fn repl_main(input: Option<PathBuf>, debug: bool) -> Result<(), Error> {
     let mut ctxt = Context::with_builtins(std_builtins());
 
     if let Some(pb) = input {
@@ -224,6 +237,9 @@ fn repl_main(input: Option<PathBuf>) -> Result<(), Error> {
                     eprintln!("ERROR! -> {:?}", e);
                     break false;
                 }
+            }
+            if debug {
+                println!("# {:?} - {:?}", ctxt.data_stack().data(), ctxt.return_stack().data());
             }
         };
         ctxt.dict.data.retain(|k, _| !k.starts_with("__"));

@@ -78,6 +78,9 @@ pub enum Error {
     /// Data stack underflowed
     DataStackUnderflow,
 
+    /// Stack Overflow
+    StackOverflow,
+
     /// Data stack was empty
     DataStackEmpty,
 
@@ -217,7 +220,7 @@ where
 
             let to_push = match cur {
                 RuntimeWord::LiteralVal(lit) => {
-                    self.data_stk.push(*lit);
+                    self.data_stk.push(*lit)?;
                     None
                 }
                 RuntimeWord::Verb(ft) => Some(WhichToken::Single(ft.clone())),
@@ -331,8 +334,10 @@ where
 pub trait Stack {
     type Item;
 
-    fn push(&mut self, data: Self::Item);
+    fn push(&mut self, data: Self::Item) -> Result<(), Error>;
     fn pop(&mut self) -> Result<Self::Item, Error>;
+    fn peek_back(&self, back: usize) -> Result<&Self::Item, Error>;
+    fn pop_back(&mut self, back: usize) -> Result<Self::Item, Error>;
 
     // Needed for builtins
     fn last(&self) -> Result<&Self::Item, Error>;

@@ -29,16 +29,49 @@ impl<T, const N: usize> HVecStack<T, N> {
 impl<T, const N: usize> Stack for HVecStack<T, N> {
     type Item = T;
 
-    fn push(&mut self, data: T) {
-        self.data.push(data).map_err(drop).unwrap();
+    fn push(&mut self, data: T) -> Result<(), Error> {
+        self.data.push(data).map_err(|_| Error::StackOverflow).map(drop)
     }
 
     fn pop(&mut self) -> Result<T, Error> {
         self.data.pop().ok_or(Error::DataStackUnderflow)
     }
 
+    fn peek_back(&self, back: usize) -> Result<&Self::Item, Error> {
+        self.data.iter().rev().skip(back).next().ok_or(Error::DataStackUnderflow)
+    }
+
     fn last(&self) -> Result<&Self::Item, Error> {
         self.data.last().ok_or(Error::InternalError) // TODO: Wrong error!
+    }
+
+    fn pop_back(&mut self, back: usize) -> Result<Self::Item, Error> {
+        if back + 1 > self.data.len() {
+            return Err(Error::DataStackUnderflow);
+        }
+
+        let len = self.data.len();
+        let idx = len - back - 1;
+
+        // 0  1  2  3  4
+        // 1, 2, 3, 4, 5 - pb(2)
+        //   len: 5
+        //   idx: 2
+        // 1, 2, 4, 5 => 3
+
+        // From the standard library's "remove" implementation, which heapless
+        // vec does not implement.
+        unsafe {
+            let ret;
+            {
+                let ptr = self.data.as_mut_ptr().add(idx);
+                ret = core::ptr::read(ptr);
+                core::ptr::copy(ptr.offset(1), ptr, len - idx - 1);
+            }
+            self.data.set_len(len - 1);
+
+            Ok(ret)
+        }
     }
 }
 
@@ -221,16 +254,22 @@ pub fn nostd_builtins<const DATA_SZ: usize, const FLOW_SZ: usize, const OUTBUF_S
     fn(&mut NoStdRuntime<DATA_SZ, FLOW_SZ, OUTBUF_SZ>) -> Result<(), Error>,
 )] {
     &[
-        ("emit", crate::builtins::bi_emit),
-        (".", crate::builtins::bi_pop),
-        ("cr", crate::builtins::bi_cr),
-        (">r", crate::builtins::bi_retstk_push),
-        ("r>", crate::builtins::bi_retstk_pop),
-        ("=", crate::builtins::bi_eq),
-        ("<", crate::builtins::bi_lt),
-        (">", crate::builtins::bi_gt),
-        ("dup", crate::builtins::bi_dup),
         ("+", crate::builtins::bi_add),
+        (".", crate::builtins::bi_pop),
+        ("2dup", crate::builtins::bi_2dup),
+        ("<", crate::builtins::bi_lt),
+        ("=", crate::builtins::bi_eq),
+        (">", crate::builtins::bi_gt),
+        (">r", crate::builtins::bi_retstk_push),
+        ("cr", crate::builtins::bi_cr),
+        ("drop", crate::builtins::bi_drop),
+        ("dup", crate::builtins::bi_dup),
+        ("emit", crate::builtins::bi_emit),
+        ("pick", crate::builtins::bi_pick),
         ("PRIV_LOOP", crate::builtins::bi_priv_loop),
+        ("r>", crate::builtins::bi_retstk_pop),
+        ("roll", crate::builtins::bi_roll),
+        ("rot", crate::builtins::bi_rot),
+        ("swap", crate::builtins::bi_swap),
     ]
 }
