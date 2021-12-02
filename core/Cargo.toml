@@ -1,6 +1,6 @@
 [package]
 name = "a4-core"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 description = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus"
 repository = "https://github.com/anachro-rs/anachro-forth"

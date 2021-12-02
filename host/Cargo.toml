@@ -1,6 +1,6 @@
 [package]
 name = "a4"
-version = "0.0.2"
+version = "0.0.4"
 edition = "2021"
 description = "A forth-inspired, bytecode-compiled scripting language for Anachro Powerbus"
 repository = "https://github.com/anachro-rs/anachro-forth"
@@ -18,7 +18,7 @@ structopt = "0.3.25"
 [dependencies.a4-core]
 path = "../core"
 features = ["std"]
-version = "0.0.3"
+version = "0.0.4"
 
 [dependencies.postcard]
 version = "0.7.2"
